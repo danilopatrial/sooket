@@ -1,0 +1,39 @@
+# systemd unit for Sooket.
+#
+# 1. Copy this file to /etc/systemd/system/sooket.service
+# 2. Edit WorkingDirectory, User, Group, and environment variables below.
+# 3. Run:
+#      systemctl daemon-reload
+#      systemctl enable sooket
+#      systemctl start sooket
+#
+# View logs:
+#      journalctl -u sooket -f
+
+[Unit]
+Description=Sooket — visual API middleware platform
+After=network.target
+
+[Service]
+Type=simple
+User=sooket
+Group=sooket
+WorkingDirectory=/opt/sooket
+ExecStart=/usr/bin/node node_modules/.bin/next start
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables — adjust or use an EnvironmentFile instead
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# Environment=ENCRYPTION_SECRET=your-secret-here
+# Environment=SOOKET_DATA_DIR=/var/lib/sooket
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+services:
+  sooket:
+    build: .
+    ports:
+      # ⚠ SECURITY: published on the host loopback only (127.0.0.1) so the app is
+      # reachable from THIS machine but NOT from the network. Sooket has NO
+      # authentication on its management API — anyone who can reach this port can
+      # read/modify every workflow and exfiltrate provider keys. Only widen this
+      # (e.g. "3000:3000" to bind all interfaces) behind a trusted network or an
+      # authenticating reverse proxy.
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - sooket_data:/data
+    environment:
+      # Required: set a strong random secret before first run.
+      # Generate one with: openssl rand -hex 32
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET}
+
+      # Optional: lock down the CORS allowed origin for /api/v1/chat.
+      # Defaults to '*' (open). Set to your frontend domain in production.
+      # CORS_ORIGIN: https://your-domain.com
+
+      # Optional: override the SQLite data directory (defaults to /data inside container).
+      # SOOKET_DATA_DIR: /data
+    restart: unless-stopped
+
+volumes:
+  sooket_data:
+    driver: local
