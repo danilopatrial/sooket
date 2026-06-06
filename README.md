@@ -4,7 +4,7 @@
 
 [![License: FSL-1.1-MIT](https://img.shields.io/badge/license-FSL--1.1--MIT-blue.svg)](LICENSE.md)
 [![CI](https://github.com/danilopatrial/sooket/actions/workflows/test.yml/badge.svg)](https://github.com/danilopatrial/sooket/actions/workflows/test.yml)
-![version](https://img.shields.io/badge/version-0.1.0--alpha-orange.svg)
+![version](https://img.shields.io/badge/version-0.1.0-orange.svg)
 
 Sooket is a visual canvas for building the logic that sits *between* a caller and
 your API — rate limiting, auth checks, PII redaction, caching, LLM calls,
