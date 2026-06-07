@@ -18,6 +18,7 @@
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { handleExecutionRequest, CORS_HEADERS } from "@/lib/execution-handler";
+import { warnIfExposedWithoutAuth } from "@/lib/security/auth";
 
 const PORT = Number(process.env.EXECUTION_PORT ?? 3001);
 // Bind to localhost by default so the server is not reachable from the network
@@ -113,6 +114,8 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   // 404 for everything else
   sendJson(res, 404, { error: "Not found" });
 });
+
+warnIfExposedWithoutAuth();
 
 server.listen(PORT, HOST, () => {
   console.log(`Sooket execution server listening on ${HOST}:${PORT}`);

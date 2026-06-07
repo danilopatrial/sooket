@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { safeEqual } from "@/lib/security/auth";
 import fs from "fs";
 import path from "path";
 
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("Authorization") ?? "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
 
-  if (!token || token !== mgmtKey) {
+  if (!token || !safeEqual(token, mgmtKey)) {
     return NextResponse.json({ error: "Invalid or missing management key" }, { status: 401 });
   }
 

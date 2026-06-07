@@ -80,9 +80,10 @@ Open `http://localhost:3000`, build a workflow on the canvas, and create an
 
 > Working on Sooket itself? `npm run dev` runs the same app with hot reload.
 
-> **Security:** Sooket has **no authentication on its management API** by design —
-> it binds to `127.0.0.1` only. Do not expose the port to an untrusted network
-> without a reverse proxy that adds auth + TLS. See [Security](#security).
+> **Security:** Sooket's management API has **no per-user login** by design — it
+> binds to `127.0.0.1` only. To expose it, either set `SOOKET_AUTH_TOKEN` (a shared
+> secret that gates the dashboard + management API) or front it with a reverse
+> proxy that adds auth + TLS. See [Security](#security).
 
 ## A real example, already on your canvas
 
@@ -175,20 +176,35 @@ happen *during* a request and return a response.
 ## Security
 
 Sooket's management API (the canvas and every `/api/workflows`, `/api/credentials`,
-`/api/provider-keys`, `/api/variables` route) is **unauthenticated by design** and
-binds to `127.0.0.1` only. Anyone who can reach the port can read or modify every
-workflow and exfiltrate provider keys.
+`/api/provider-keys`, `/api/variables` route) has **no per-user login** and binds
+to `127.0.0.1` only. Unless you enable the shared-secret gate, anyone who can reach
+the port can read or modify every workflow and exfiltrate provider keys.
 
 - `npm run dev`, `npm start`, the execution server, and `docker compose up` all
   bind/publish to loopback only.
 - The execution routes (`/api/v1/chat`, `/api/webhooks/[slug]`) are gated by
   per-workflow keys/tokens and send CORS headers; set `CORS_ORIGIN` to pin the
   allowed origin if you expose them.
-- To reach Sooket over a network, put it behind a reverse proxy that adds
-  authentication and TLS — do **not** just widen the bind address.
 
-See the configuration knobs (`SOOKET_HOST`, `CORS_ORIGIN`, `SOOKET_MAX_BODY_BYTES`)
-in [.env.example](.env.example).
+### Exposing Sooket safely
+
+If you must reach Sooket over a network, do **one** of the following — do not just
+widen the bind address and leave it open:
+
+1. **Shared-secret gate (built in).** Set `SOOKET_AUTH_TOKEN` to a long random
+   value (e.g. `openssl rand -hex 32`). Every management request must then present
+   it as `Authorization: Bearer <token>`; the dashboard prompts once at `/unlock`
+   and stores an httpOnly cookie. The execution API, webhooks, and `/api/health`
+   keep their own auth and stay reachable. This is a single shared password, not
+   multi-user accounts.
+2. **Authenticating reverse proxy.** Put Sooket behind a proxy that adds
+   authentication and TLS.
+
+If Sooket is bound to a non-loopback host (`SOOKET_HOST`) **without**
+`SOOKET_AUTH_TOKEN`, it prints a loud startup warning.
+
+See the configuration knobs (`SOOKET_HOST`, `SOOKET_AUTH_TOKEN`, `CORS_ORIGIN`,
+`SOOKET_MAX_BODY_BYTES`) in [.env.example](.env.example).
 
 ## Contributing
 

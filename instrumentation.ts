@@ -9,6 +9,11 @@ export async function register() {
       );
     }
 
+    // Warn loudly if the server is reachable from the network without the
+    // shared-secret gate (SOOKET_AUTH_TOKEN) enabled.
+    const { warnIfExposedWithoutAuth } = await import("./lib/security/auth");
+    warnIfExposedWithoutAuth();
+
     // Sweep executions stuck in 'running' from a previous unclean shutdown
     try {
       const { getDb } = await import("./lib/db");

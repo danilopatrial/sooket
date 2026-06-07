@@ -8,7 +8,8 @@ Sooket is a visual API middleware platform written in TypeScript. It lets users
 build workflow pipelines on a React Flow canvas and expose them as API
 endpoints. The stack is a Next.js 15 frontend with a local SQLite backend.
 It is designed to run locally on the user's own server — no cloud deployment,
-no authentication required.
+no user accounts required (an optional instance-wide shared secret can gate the
+management surface; see Authentication & exposure).
 
 ## Git Commits
 
@@ -52,8 +53,10 @@ test(anthropic-node): cover streaming error path
 ## General Guidelines
 
 - Always use npm (not pnpm or yarn)
-- There is no authentication — local-only mode, all login/register pages redirect
-  to `/workflow`
+- There are no user accounts — local-only mode, all login/register pages redirect
+  to `/workflow`. There is an optional instance-wide shared-secret gate
+  (`SOOKET_AUTH_TOKEN`) enforced by `proxy.ts`; when unset, the management surface
+  is open (the historical default). See Authentication & exposure below.
 - Only one `anthropic` node is allowed per workflow (enforced in
   `WorkflowCanvas.tsx`)
 - Setting `is_active=true` on a workflow deactivates all other workflows
@@ -311,4 +314,30 @@ ENCRYPTION_SALT              # Optional PBKDF2 salt; defaults to "sooket-salt".
                              # for the life of the data — changing it makes
                              # existing ciphertext undecryptable.
 SOOKET_DATA_DIR              # Optional override for SQLite data directory
+SOOKET_AUTH_TOKEN            # Optional shared secret. When set, proxy.ts gates the
+                             # management API + dashboard (Bearer header or the
+                             # /unlock cookie). Unset = open. Execution/webhook/
+                             # health routes keep their own auth and are exempt.
+SOOKET_HOST                  # Bind interface (default 127.0.0.1). Non-loopback bind
+                             # without SOOKET_AUTH_TOKEN triggers a startup warning.
 ```
+
+## Authentication & exposure
+
+Sooket has no per-user login. Its security model assumes the process is bound to
+loopback (`SOOKET_HOST` defaults to `127.0.0.1`). Two safeguards back this up:
+
+- **Exposure warning (always on):** `warnIfExposedWithoutAuth()` in
+  `lib/security/auth.ts` prints a loud startup banner when bound to a non-loopback
+  host without `SOOKET_AUTH_TOKEN`. Wired into `instrumentation.ts` (Next) and
+  `server/index.ts` (execution server).
+- **Shared-secret gate (opt-in):** set `SOOKET_AUTH_TOKEN` to require the secret
+  on the management surface. Enforced centrally in `proxy.ts` (the Next 16
+  successor to `middleware.ts`). Programmatic callers send
+  `Authorization: Bearer <token>`; the browser unlocks once at `/unlock`
+  (`app/api/unlock/route.ts` sets the httpOnly `sooket_auth` cookie). Public
+  exemptions (`/api/v1/*`, `/api/webhooks/*`, `/api/health`, `/unlock`) live in
+  `isPublicPath()`. All token comparisons use the constant-time `safeEqual()`.
+
+This is a single shared password, **not** a multi-user account system — do not
+add login/sessions/user tables under this banner.
