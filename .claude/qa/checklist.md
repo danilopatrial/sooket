@@ -5,6 +5,11 @@ Status flags: `[ ]` = pending · `[x]` = passed · `[!]` = has findings · `[-]`
 Each item links to a detailed spec file in `.claude/qa/specs/`.
 Findings are written to `.claude/qa/findings.md`.
 
+> **Note:** The UI/navigation specs (sections 1–29) assume the optional
+> shared-secret gate is **off** (`SOOKET_AUTH_TOKEN` unset — the default). When the
+> gate is on, the dashboard requires unlocking at `/unlock` first. The gate's own
+> behavior is covered in section 46.
+
 ---
 
 ## 1. Navigation & Routing
@@ -539,4 +544,20 @@ Findings are written to `.claude/qa/findings.md`.
 
 ---
 
-*Total items: 301*
+## 46. Authentication Gate & Exposure
+- [ ] [AUTH-01] Gate disabled (no `SOOKET_AUTH_TOKEN`) → management API + dashboard open (default) — [spec](specs/AUTH-01.md)
+- [ ] [AUTH-02] Gate on → management API without auth returns 401 JSON `{error:"Authentication required"}` — [spec](specs/AUTH-02.md)
+- [ ] [AUTH-03] Gate on → valid `Authorization: Bearer <token>` grants access — [spec](specs/AUTH-03.md)
+- [ ] [AUTH-04] Gate on → browser navigation without cookie 307-redirects to `/unlock?next=` — [spec](specs/AUTH-04.md)
+- [ ] [AUTH-05] `/unlock` with correct token sets httpOnly `sooket_auth` cookie and grants access — [spec](specs/AUTH-05.md)
+- [ ] [AUTH-06] `/unlock` wrong/missing/non-string token → 401; gate disabled → 400 — [spec](specs/AUTH-06.md)
+- [ ] [AUTH-07] Public exemptions when gated: `/api/v1/chat`, `/api/webhooks/*`, `/api/health`, `/unlock`, `/api/admin/backup` — [spec](specs/AUTH-07.md)
+- [ ] [AUTH-08] Execution API still enforces its own `sk-wf-*` auth, independent of the gate — [spec](specs/AUTH-08.md)
+- [ ] [AUTH-09] Exposure warning printed on non-loopback bind without token; silent on loopback or with token — [spec](specs/AUTH-09.md)
+- [ ] [AUTH-10] Unlock cookie marked `Secure` on non-loopback bind, not on loopback — [spec](specs/AUTH-10.md)
+- [ ] [AUTH-11] `/unlock` open-redirect protection — `next` honored only for same-origin relative paths — [spec](specs/AUTH-11.md)
+- [ ] [AUTH-12] Admin backup uses constant-time compare and stays reachable with `sk-mw-*` when the gate is on (exemption) — [spec](specs/AUTH-12.md)
+
+---
+
+*Total items: 313*

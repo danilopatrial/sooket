@@ -53,13 +53,29 @@ describe("proxy() shared-secret gate", () => {
     expect(res.headers.get("location")).toBeNull();
   });
 
-  it("never gates the public execution/webhook/health/unlock paths", () => {
+  it("never gates the public execution/webhook/health/backup/unlock paths", () => {
     process.env.SOOKET_AUTH_TOKEN = "secret";
-    for (const p of ["/api/v1/chat", "/api/webhooks/x", "/api/health", "/unlock", "/api/unlock"]) {
+    for (const p of [
+      "/api/v1/chat",
+      "/api/webhooks/x",
+      "/api/health",
+      "/api/admin/backup",
+      "/unlock",
+      "/api/unlock",
+    ]) {
       const res = proxy(req(p));
       expect(res.status, p).toBe(200);
       expect(res.headers.get("location"), p).toBeNull();
     }
+  });
+
+  it("lets a sk-mw-* backup request through without the gate token (no header collision)", () => {
+    process.env.SOOKET_AUTH_TOKEN = "secret";
+    // The backup route carries its own sk-mw-* auth in the same Authorization
+    // header; the proxy must not 401 it just because it != SOOKET_AUTH_TOKEN.
+    const res = proxy(req("/api/admin/backup", { auth: "Bearer sk-mw-abc123" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("location")).toBeNull();
   });
 
   it("exports a matcher excluding Next internals", () => {

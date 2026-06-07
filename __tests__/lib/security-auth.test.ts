@@ -112,12 +112,13 @@ describe("warnIfExposedWithoutAuth", () => {
 // ─── isPublicPath ───────────────────────────────────────────────────────────
 
 describe("isPublicPath", () => {
-  it("keeps execution, webhook, health and unlock paths public", () => {
+  it("keeps execution, webhook, health, backup and unlock paths public", () => {
     for (const p of [
       "/api/health",
       "/api/v1/chat",
       "/api/v1/anything",
       "/api/webhooks/my-flow",
+      "/api/admin/backup",
       "/unlock",
       "/api/unlock",
     ]) {
@@ -130,7 +131,6 @@ describe("isPublicPath", () => {
       "/api/workflows",
       "/api/workflows/abc/api-keys",
       "/api/account/api-key",
-      "/api/admin/backup",
       "/api/credentials",
       "/workflow",
       "/",

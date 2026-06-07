@@ -23,7 +23,7 @@ Navigating to `/account` renders two cards: an Instance card (mode badge "Local"
 - Page heading: "Account" (`text-2xl font-semibold`) with subtitle "Local instance"
 - A `Card` component ("Instance") shows:
   - `CardTitle`: "Instance"
-  - `CardDescription`: "Running locally — no authentication required"
+  - `CardDescription`: "Running locally — no user accounts (optional shared-secret gate)"
   - Row "Mode" → `Badge variant="secondary"` reading "Local"
   - Row "Workflows" → `Badge variant="secondary"` with the count of all workflows in the DB
   - If a management API key exists: row "API key" showing first 12 chars + `••••••••`

@@ -84,6 +84,9 @@ export function warnIfExposedWithoutAuth(): void {
  * Paths that must remain reachable even when the shared-secret gate is on:
  *   - `/api/v1/*` and `/api/webhooks/*` carry their own per-key/token auth and
  *     are the public-facing execution surface.
+ *   - `/api/admin/backup` authenticates with its own `sk-mw-*` management key via
+ *     the same `Authorization` header; gating it here would collide with that
+ *     header. Minting new `sk-mw-*` keys is itself gated, so the exemption is safe.
  *   - `/api/health` is an unauthenticated liveness probe by design.
  *   - the unlock page + its action must be reachable to obtain access.
  */
@@ -91,6 +94,7 @@ export function isPublicPath(pathname: string): boolean {
   if (pathname === "/api/health") return true;
   if (pathname === "/api/v1/chat" || pathname.startsWith("/api/v1/")) return true;
   if (pathname.startsWith("/api/webhooks/")) return true;
+  if (pathname === "/api/admin/backup") return true;
   if (pathname === "/unlock" || pathname === "/api/unlock") return true;
   return false;
 }

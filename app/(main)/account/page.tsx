@@ -25,7 +25,7 @@ export default function AccountPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Instance</CardTitle>
-          <CardDescription>Running locally — no authentication required</CardDescription>
+          <CardDescription>Running locally — no user accounts (optional shared-secret gate)</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
