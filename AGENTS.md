@@ -12,6 +12,17 @@ no authentication required.
 
 ## Git Commits
 
+### Branch Policy
+
+**All AI agent work happens on the `dev` branch.** The `main` branch is for
+public access and must stay bug-free; it is **forbidden** for AI agents.
+
+- Before modifying any file, verify you are on `dev` (`git branch --show-current`).
+  If not, switch to it (`git checkout dev`) before making changes.
+- Before committing, confirm again you are on `dev` — never commit to `main`.
+- The only exception: when the user **explicitly** asks for a task related to
+  `main`, you may operate on `main` for that task.
+
 After completing any task that modifies files, commit the changes using this template:
 
 ```
