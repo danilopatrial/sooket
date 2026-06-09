@@ -1,10 +1,44 @@
 {
   "name": "sooket",
   "version": "0.1.1",
-  "private": true,
+  "description": "Visual API middleware — build workflow pipelines on a canvas and expose them as self-hosted API endpoints",
   "license": "SEE LICENSE IN LICENSE.md",
+  "homepage": "https://github.com/danilopatrial/sooket#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/danilopatrial/sooket.git"
+  },
+  "bugs": {
+    "url": "https://github.com/danilopatrial/sooket/issues"
+  },
+  "keywords": [
+    "workflow",
+    "api",
+    "middleware",
+    "low-code",
+    "llm",
+    "pipeline",
+    "self-hosted"
+  ],
+  "bin": {
+    "sooket": "bin/sooket.mjs"
+  },
+  "files": [
+    ".next",
+    "!.next/cache",
+    "!.next/dev",
+    "!.next/diagnostics",
+    "!.next/trace",
+    ".next-external-aliases.json",
+    "bin",
+    "public",
+    "server",
+    "lib",
+    "next.config.ts",
+    "tsconfig.json"
+  ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.5.0"
   },
   "scripts": {
     "predev": "node scripts/ensure-env.mjs",
@@ -15,6 +49,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "lint": "eslint",
+    "prepack": "node scripts/prepack-build.mjs",
     "setup": "npm install --ignore-scripts && npm rebuild --ignore-scripts sharp",
     "backup": "node -e \"const{cpSync,mkdirSync,existsSync}=require('fs'),p=process.env.SOOKET_DATA_DIR||'data',src=p+'/sooket.db';if(!existsSync(src)){console.error('No database at '+src);process.exit(1);}const ts=new Date().toISOString().replace(/[:.]/g,'-').slice(0,19),dst=p+'/sooket.db.bak-'+ts;cpSync(src,dst);console.log('Backup created: '+dst);\"",
     "execution-server": "node server/run.mjs"
@@ -32,6 +67,7 @@
     "fast-xml-parser": "^5.8.0",
     "franc-min": "^6.2.0",
     "gpt-tokenizer": "^3.4.0",
+    "jiti": "^2.7.0",
     "lucide-react": "^1.17.0",
     "nanoid": "^5.1.11",
     "next": "16.2.7",

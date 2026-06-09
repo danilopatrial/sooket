@@ -50,7 +50,24 @@ Check what you have with `node -v` — it should print `v22` or newer.
 - **Any platform without a version manager:** download the LTS installer from
   [nodejs.org](https://nodejs.org).
 
-Confirm with `node -v` (≥ v22) and `npm -v`, then continue:
+Confirm with `node -v` (≥ v22) and `npm -v`, then continue.
+
+**Fastest — run from npm, no clone needed:**
+
+```bash
+npx sooket                           # -> http://localhost:3000
+```
+
+Data (SQLite database + generated encryption secret) lives in `~/.sooket`;
+override with `SOOKET_DATA_DIR`. See `npx sooket --help` for ports, the
+execution-server subcommand, and host binding.
+
+> **Install fails building `sharp`?** If you have a system-wide libvips
+> (common on Arch or with Homebrew), sharp tries to compile against it
+> instead of using its prebuilt binaries. Skip the detection with
+> `SHARP_IGNORE_GLOBAL_LIBVIPS=1 npx sooket`.
+
+**Or from source:**
 
 ```bash
 git clone https://github.com/danilopatrial/sooket.git

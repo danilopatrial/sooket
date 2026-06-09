@@ -61,3 +61,7 @@ worker/.wrangler/
 
 # claude
 .claude/.tmp
+
+# npm pack output
+*.tgz
+.next-external-aliases.json

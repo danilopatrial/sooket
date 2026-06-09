@@ -11,6 +11,8 @@ FROM base AS builder
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# Standalone output is opt-in (the npm package uses a regular build)
+ENV SOOKET_STANDALONE=1
 RUN npm run build
 
 # Production image
