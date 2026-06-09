@@ -108,7 +108,11 @@ describe("prepareDataDir", () => {
     expect(env.ENCRYPTION_SECRET).toMatch(/^[0-9a-f]{64}$/);
     const envFile = join(dataDir, ".env");
     expect(readFileSync(envFile, "utf8")).toContain(`ENCRYPTION_SECRET=${env.ENCRYPTION_SECRET}`);
-    expect(statSync(envFile).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") {
+      // Windows has no POSIX permission bits — the mode option is a no-op
+      // there and stat always reports 0o666.
+      expect(statSync(envFile).mode & 0o777).toBe(0o600);
+    }
   });
 
   it("reuses the same secret on repeated runs", () => {
