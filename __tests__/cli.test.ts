@@ -8,7 +8,7 @@ import {
   parseCliArgs,
   prepareDataDir,
   ensureExternalAliases,
-} from "../bin/sooket.mjs";
+} from "../bin/cli.mjs";
 
 describe("parseEnvFile", () => {
   it("returns an empty object for empty input", () => {
