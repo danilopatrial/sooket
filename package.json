@@ -1,6 +1,6 @@
 {
   "name": "sooket",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Visual API middleware — build workflow pipelines on a canvas and expose them as self-hosted API endpoints",
   "license": "SEE LICENSE IN LICENSE.md",
   "homepage": "https://github.com/danilopatrial/sooket#readme",
