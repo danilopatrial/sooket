@@ -29,7 +29,7 @@ import {
   symlinkSync,
 } from "node:fs";
 import { createRequire } from "node:module";
-import { homedir } from "node:os";
+import { constants as osConstants, homedir } from "node:os";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
@@ -211,6 +211,32 @@ export function parseCliArgs(argv) {
   };
 }
 
+// Signals that indicate the server binary itself crashed (rather than being
+// stopped on purpose) — almost always a corrupted install, e.g. an npx/npm
+// download that was interrupted and left a truncated native module behind.
+const CRASH_SIGNALS = new Set(["SIGBUS", "SIGSEGV", "SIGILL", "SIGABRT", "SIGFPE"]);
+
+/**
+ * Map a child "exit" event to this process's exit code, surfacing signal
+ * deaths instead of masking them as success (a signal-killed child reports
+ * `code: null`, which `code ?? 0` would turn into a clean exit 0).
+ */
+export function resolveChildExit(code, signal, log = console.error) {
+  if (signal) {
+    log(`[Sooket] Server process was killed by ${signal}.`);
+    if (CRASH_SIGNALS.has(signal)) {
+      log(
+        "[Sooket] This usually means the installed package is corrupted — e.g. an " +
+          "interrupted npx/npm install left a truncated native module behind. " +
+          "Clear the cached install and run again:\n" +
+          "  rm -rf ~/.npm/_npx   (or: npm cache clean --force && reinstall sooket)"
+      );
+    }
+    return 128 + (osConstants.signals[signal] ?? 0);
+  }
+  return code ?? 0;
+}
+
 const USAGE = `Usage: sooket [command] [options]
 
 Commands:
@@ -272,7 +298,7 @@ export function main() {
     );
   }
 
-  child.on("exit", (code) => process.exit(code ?? 0));
+  child.on("exit", (code, signal) => process.exit(resolveChildExit(code, signal)));
   for (const signal of ["SIGINT", "SIGTERM"]) {
     process.on(signal, () => child.kill(signal));
   }

@@ -8,6 +8,7 @@ import {
   parseCliArgs,
   prepareDataDir,
   ensureExternalAliases,
+  resolveChildExit,
 } from "../bin/cli.mjs";
 
 describe("parseEnvFile", () => {
@@ -161,6 +162,40 @@ describe("prepareDataDir", () => {
     };
     prepareDataDir(env);
     expect(env.ENCRYPTION_SECRET).toBe("aaaa");
+  });
+});
+
+describe("resolveChildExit", () => {
+  it("passes through a numeric exit code without logging", () => {
+    const lines: string[] = [];
+    expect(resolveChildExit(0, null, (m: string) => lines.push(m))).toBe(0);
+    expect(resolveChildExit(3, null, (m: string) => lines.push(m))).toBe(3);
+    expect(lines).toEqual([]);
+  });
+
+  it("treats a null code with no signal as success", () => {
+    expect(resolveChildExit(null, null, () => {})).toBe(0);
+  });
+
+  it("maps a signal death to 128 + signal number instead of 0", () => {
+    const lines: string[] = [];
+    const code = resolveChildExit(null, "SIGTERM", (m: string) => lines.push(m));
+    expect(code).toBe(143);
+    expect(lines.join("\n")).toContain("killed by SIGTERM");
+  });
+
+  it("adds a corrupted-install hint for crash signals like SIGBUS", () => {
+    const lines: string[] = [];
+    const code = resolveChildExit(null, "SIGBUS", (m: string) => lines.push(m));
+    expect(code).toBe(128 + 7);
+    expect(lines.join("\n")).toMatch(/corrupted/i);
+    expect(lines.join("\n")).toContain("~/.npm/_npx");
+  });
+
+  it("does not show the corrupted-install hint for ordinary termination signals", () => {
+    const lines: string[] = [];
+    resolveChildExit(null, "SIGTERM", (m: string) => lines.push(m));
+    expect(lines.join("\n")).not.toMatch(/corrupted/i);
   });
 });
 

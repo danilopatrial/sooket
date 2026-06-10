@@ -66,6 +66,11 @@ execution-server subcommand, and host binding.
 > (common on Arch or with Homebrew), sharp tries to compile against it
 > instead of using its prebuilt binaries. Skip the detection with
 > `SHARP_IGNORE_GLOBAL_LIBVIPS=1 npx sooket`.
+>
+> A failed install can leave a half-extracted package in the npx cache; the
+> next `npx sooket` then reuses it and the server dies silently (often from a
+> SIGBUS in a truncated native module) right after "Ready". Clear it with
+> `rm -rf ~/.npm/_npx` and install again.
 
 **Or from source:**
 
