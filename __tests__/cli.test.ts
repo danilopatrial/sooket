@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, writeFileSync, statSync, existsSync, lstatSync, realpathSync, symlinkSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { constants as osConstants, tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
@@ -180,14 +180,16 @@ describe("resolveChildExit", () => {
   it("maps a signal death to 128 + signal number instead of 0", () => {
     const lines: string[] = [];
     const code = resolveChildExit(null, "SIGTERM", (m: string) => lines.push(m));
-    expect(code).toBe(143);
+    expect(code).toBe(128 + osConstants.signals.SIGTERM);
     expect(lines.join("\n")).toContain("killed by SIGTERM");
   });
 
   it("adds a corrupted-install hint for crash signals like SIGBUS", () => {
     const lines: string[] = [];
     const code = resolveChildExit(null, "SIGBUS", (m: string) => lines.push(m));
-    expect(code).toBe(128 + 7);
+    // Signal numbers are platform-specific (SIGBUS is 7 on Linux, 10 on
+    // macOS, absent on Windows where the fallback yields a bare 128).
+    expect(code).toBe(128 + (osConstants.signals.SIGBUS ?? 0));
     expect(lines.join("\n")).toMatch(/corrupted/i);
     expect(lines.join("\n")).toContain("~/.npm/_npx");
   });
