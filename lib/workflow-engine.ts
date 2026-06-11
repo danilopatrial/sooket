@@ -28,6 +28,38 @@ import type {
   WorkflowHooks,
 } from "@/lib/workflow-types";
 
+// ─── Execution deadline ──────────────────────────────────────────────────────
+
+/** Stable message prefix for an execution that exceeded its wall-clock budget. */
+export const WORKFLOW_TIMEOUT_ERROR = "Workflow execution timed out";
+
+/**
+ * Thrown by the engine when an execution runs past its deadline. Carries the
+ * configured limit so callers can report it. Distinct from node-level timeouts
+ * (HTTP, Custom Code), which bound a single node — this bounds the whole graph.
+ */
+export class WorkflowTimeoutError extends Error {
+  readonly limitMs: number;
+  constructor(limitMs: number) {
+    super(`${WORKFLOW_TIMEOUT_ERROR} after ${limitMs} ms`);
+    this.name = "WorkflowTimeoutError";
+    this.limitMs = limitMs;
+  }
+}
+
+/**
+ * Resolve the per-execution wall-clock budget from `EXECUTION_TIMEOUT_MS`,
+ * defaulting to 30 s. A missing, empty, non-numeric, or non-positive value
+ * disables the deadline (returns 0).
+ */
+export function executionTimeoutMs(): number {
+  const raw = process.env.EXECUTION_TIMEOUT_MS?.trim();
+  if (raw === undefined || raw === "") return 30_000;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return 0;
+  return Math.floor(parsed);
+}
+
 // ─── Variable resolution ─────────────────────────────────────────────────────
 
 async function loadCustomerVars(
@@ -241,6 +273,15 @@ async function evaluateNode(
   const cacheKey = `${nodeId}:${sourceHandle ?? ""}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey)!;
 
+  // Wall-clock deadline: abort before scheduling any further work once the
+  // execution budget is spent. Checked at every node boundary (cooperative
+  // cancellation) so the engine stops launching new nodes and frees its
+  // semaphore slot as soon as the in-flight node settles. Already-cached and
+  // pinned reads above are instant and exempt.
+  if (reqCtx.deadlineAt !== undefined && Date.now() > reqCtx.deadlineAt) {
+    throw new WorkflowTimeoutError(executionTimeoutMs());
+  }
+
   // Pinned-data short-circuit: return the frozen result without executing the node.
   if (workflow.pinData?.[nodeId]) {
     const pinned = workflow.pinData[nodeId];
@@ -302,6 +343,9 @@ async function evaluateNode(
     traceOutput = result.value;
     return result;
   } catch (err) {
+    // A blown deadline is terminal: never let an error edge catch it and resume
+    // the graph, or the execution budget would be unbounded in practice.
+    if (err instanceof WorkflowTimeoutError) throw err;
     const errMsg = err instanceof Error ? err.message : String(err);
     const hasErrorEdge = workflow.edges.some(
       (e) => e.source === nodeId && e.connectionType === "error"
@@ -416,6 +460,15 @@ export async function executeWorkflow(
   hooks: WorkflowHooks = {},
   subDepth = 0
 ): Promise<WorkflowExecutionResult> {
+  // Arm the wall-clock deadline once, for the top-level run only. Sub-workflows
+  // (subDepth > 0) inherit the parent's deadline through the shared reqCtx, so a
+  // nested call chain cannot reset or outlast the original budget. A deadline an
+  // upstream caller already set is respected and never overwritten.
+  if (subDepth === 0 && reqCtx.deadlineAt === undefined) {
+    const limit = executionTimeoutMs();
+    if (limit > 0) reqCtx.deadlineAt = Date.now() + limit;
+  }
+
   const outputNodes = workflow.nodes.filter((n) => n.type === "workflowOutput");
   const outputEdges = workflow.edges.filter((e) => outputNodes.some((o) => o.id === e.target));
   if (outputEdges.length === 0) {
@@ -443,7 +496,7 @@ export async function executeWorkflow(
         );
         if (r.active !== false) { result = r; break; }
       } catch (err) {
-        error = String(err);
+        error = err instanceof WorkflowTimeoutError ? err.message : String(err);
         if (workflow.errorWorkflowId != null) {
           try {
             await triggerErrorWorkflow(workflow, error, encryptionSecret, adapter);

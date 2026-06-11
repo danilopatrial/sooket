@@ -281,6 +281,8 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [ENGINE-06] Error workflow: parent workflow failure triggers the assigned error workflow — [spec](specs/ENGINE-06.md)
 - [x] [ENGINE-07] Concurrency: 503 returned when 10 execution slots are full — [spec](specs/ENGINE-07.md)
 - [x] [ENGINE-08] Memoization: each node runs at most once per request regardless of how many nodes reference it — [spec](specs/ENGINE-08.md)
+- [x] [ENGINE-09] Execution deadline: a run past `EXECUTION_TIMEOUT_MS` aborts and returns 504 (not absorbed by error edges) — [spec](specs/ENGINE-09.md)
+- [x] [ENGINE-10] Queue-wait timeout: a request queued past `EXECUTION_QUEUE_TIMEOUT_MS` gives up with 503 instead of waiting forever — [spec](specs/ENGINE-10.md)
 
 ---
 

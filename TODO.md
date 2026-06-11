@@ -19,7 +19,12 @@
 
 ## 1. Flaws & bugs (things I'd consider blockers or near-blockers)
 
-### 1.1 No overall workflow execution timeout — a single slow workflow can wedge the instance
+### 1.1 No overall workflow execution timeout — a single slow workflow can wedge the instance — ✅ DONE (2026-06-11)
+Implemented: a wall-clock execution deadline (`EXECUTION_TIMEOUT_MS`, default 30 s,
+checked at every node boundary, terminal, inherited by sub-workflows → HTTP 504)
+and a queue-wait timeout in `ExecutionSemaphore` (`EXECUTION_QUEUE_TIMEOUT_MS`,
+default 10 s → the existing 503). Covered by unit tests + QA specs ENGINE-09/10.
+
 `executeWorkflow()` in `lib/workflow-engine.ts` has **no wall-clock deadline**.
 Individual nodes have their own timeouts (HTTP node 10s default, Custom Code 5s),
 but a workflow chaining 20 HTTP calls, or a Retry node with exponential backoff

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { executeWorkflow, type Workflow } from "@/lib/workflow-engine";
+import { executeWorkflow, WORKFLOW_TIMEOUT_ERROR, type Workflow } from "@/lib/workflow-engine";
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { CORS_HEADERS } from "@/lib/execution-handler";
@@ -108,7 +108,8 @@ async function handleWebhook(request: Request, slug: string): Promise<Response> 
   }
 
   if (error) {
-    return NextResponse.json({ ok: false, error }, { status: 500, headers: CORS_HEADERS });
+    const status = error.includes(WORKFLOW_TIMEOUT_ERROR) ? 504 : 500;
+    return NextResponse.json({ ok: false, error }, { status, headers: CORS_HEADERS });
   }
 
   if (!result) {

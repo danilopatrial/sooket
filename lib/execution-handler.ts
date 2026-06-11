@@ -8,7 +8,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 import { getDb } from "@/lib/db";
-import { executeWorkflow, NO_OUTPUT_CONNECTED_ERROR, type Workflow } from "@/lib/workflow-engine";
+import { executeWorkflow, NO_OUTPUT_CONNECTED_ERROR, WORKFLOW_TIMEOUT_ERROR, type Workflow } from "@/lib/workflow-engine";
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
@@ -178,8 +178,14 @@ export async function handleExecutionRequest(
 
   // ── 12. Format result ─────────────────────────────────────────────────────
   // A disconnected output is a workflow misconfiguration (client error), not a
-  // runtime failure — surface it as 400, like the no-active-path case below.
-  if (error) return fail({ error }, error === NO_OUTPUT_CONNECTED_ERROR ? 400 : 500);
+  // runtime failure — surface it as 400, like the no-active-path case below. A
+  // blown execution deadline maps to 504 (Gateway Timeout) so callers can tell
+  // "the pipeline took too long" apart from a genuine 500.
+  if (error) {
+    if (error === NO_OUTPUT_CONNECTED_ERROR) return fail({ error }, 400);
+    if (error.includes(WORKFLOW_TIMEOUT_ERROR)) return fail({ error }, 504);
+    return fail({ error }, 500);
+  }
   if (!result) return fail({ error: "No active path reached any output node" }, 400);
 
   const rv = result.value;

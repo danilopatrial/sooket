@@ -43,6 +43,14 @@ export interface ReqContext {
   url: string;
   rawBody: string;
   ip: string;
+  /**
+   * Absolute wall-clock deadline (ms since epoch) for the whole execution. The
+   * engine checks it at every node boundary and aborts with a
+   * `WorkflowTimeoutError` once passed. Set automatically by `executeWorkflow`
+   * for top-level runs from `EXECUTION_TIMEOUT_MS`; sub-workflows inherit the
+   * same value through the shared context so a deep call chain can't outlast it.
+   */
+  deadlineAt?: number;
 }
 
 export interface WorkflowExecutionResult {

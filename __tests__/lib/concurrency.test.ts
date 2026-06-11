@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { ExecutionSemaphore } from "@/lib/concurrency";
 
 function makeSemaphore(max: number, maxQueue: number) {
@@ -108,5 +108,84 @@ describe("ExecutionSemaphore", () => {
     s.release();
     await p2;
     expect(order).toEqual([1, 2]);
+  });
+
+  it("queueTimeoutMs defaults to 0 (wait forever) for two-arg construction", () => {
+    const s = new ExecutionSemaphore(1, 5);
+    expect(s.queueTimeoutMs).toBe(0);
+  });
+
+  describe("queue-wait timeout", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("resolves false when a queued waiter exceeds queueTimeoutMs", async () => {
+      const s = new ExecutionSemaphore(1, 5, 1000);
+      await s.acquire();           // fills the only slot
+      const pending = s.acquire(); // queues, will time out
+      expect(s.queueDepth).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(await pending).toBe(false);
+      // The timed-out waiter is removed, freeing its queue slot.
+      expect(s.queueDepth).toBe(0);
+    });
+
+    it("a waiter granted a slot before its timeout never times out", async () => {
+      const s = new ExecutionSemaphore(1, 5, 1000);
+      await s.acquire();
+      const pending = s.acquire();
+
+      // Release before the timeout fires — the waiter is granted true.
+      s.release();
+      expect(await pending).toBe(true);
+
+      // Advancing past the deadline must NOT double-settle or corrupt counts.
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(s.activeCount).toBe(1);
+      expect(s.queueDepth).toBe(0);
+    });
+
+    it("a timed-out waiter does not consume a slot on later release", async () => {
+      const s = new ExecutionSemaphore(1, 5, 1000);
+      await s.acquire();
+      const timedOut = s.acquire();
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(await timedOut).toBe(false);
+
+      // The active holder releases. With no live waiters, the slot should free
+      // up completely rather than being handed to the dead entry.
+      s.release();
+      expect(s.activeCount).toBe(0);
+      expect(s.queueDepth).toBe(0);
+
+      // A fresh caller can immediately acquire.
+      expect(await s.acquire()).toBe(true);
+    });
+
+    it("only the timed-out waiter is dropped; earlier-released waiters still run", async () => {
+      const s = new ExecutionSemaphore(1, 5, 1000);
+      await s.acquire();
+      const first = s.acquire();   // queued first
+      const second = s.acquire();  // queued second
+      expect(s.queueDepth).toBe(2);
+
+      // Release once after 500ms: `first` is granted, `second` keeps waiting.
+      await vi.advanceTimersByTimeAsync(500);
+      s.release();
+      expect(await first).toBe(true);
+      expect(s.queueDepth).toBe(1);
+
+      // `second` was queued at t=0 with a 1000ms budget → times out at t=1000.
+      await vi.advanceTimersByTimeAsync(500);
+      expect(await second).toBe(false);
+      expect(s.queueDepth).toBe(0);
+    });
   });
 });

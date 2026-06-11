@@ -9,6 +9,7 @@ vi.stubGlobal("setImmediate", vi.fn());
 vi.mock("@/lib/workflow-engine", () => ({
   executeWorkflow: vi.fn(),
   NO_OUTPUT_CONNECTED_ERROR: "No output node is connected",
+  WORKFLOW_TIMEOUT_ERROR: "Workflow execution timed out",
 }));
 
 vi.mock("@/lib/concurrency", () => ({
@@ -211,6 +212,18 @@ describe("handleExecutionRequest — auth flow", () => {
     });
     const { status } = await call("sk-wf-valid");
     expect(status).toBe(500);
+  });
+
+  it("returns 504 (not 500) when the execution deadline is exceeded", async () => {
+    seedKey(db);
+    vi.mocked(executeWorkflow).mockResolvedValueOnce({
+      result: null,
+      error: "Workflow execution timed out after 30000 ms",
+      traces: [],
+    });
+    const { status, body } = await call("sk-wf-valid");
+    expect(status).toBe(504);
+    expect((body as Record<string, unknown>).error).toContain("timed out");
   });
 
   it("200 when body is empty string (treated as empty object)", async () => {
