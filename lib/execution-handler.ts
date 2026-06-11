@@ -12,6 +12,7 @@ import { executeWorkflow, NO_OUTPUT_CONNECTED_ERROR, WORKFLOW_TIMEOUT_ERROR, typ
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
+import { hashApiKey } from "@/lib/security/api-keys";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -66,13 +67,16 @@ export async function handleExecutionRequest(
   if (!apiKey) return fail({ error: "Missing Authorization header" }, 401);
 
   // ── 2. Key lookup (join workflows so we get workflow data in one query) ────
+  // Keys are stored hashed; look up by the hash of the presented key, never the
+  // raw value. A constant-length SHA-256 hex lookup also sidesteps key-length
+  // side channels in the index probe.
   const keyRow = db.prepare(
     `SELECT k.id as key_id, k.scopes, k.expires_at, k.rate_limit_override,
             w.id, w.nodes, w.edges, w.is_active, w.error_workflow_id
      FROM workflow_api_keys k
      JOIN workflows w ON w.id = k.workflow_id
-     WHERE k.key = ? AND k.is_active = 1`
-  ).get(apiKey) as unknown as {
+     WHERE k.key_hash = ? AND k.is_active = 1`
+  ).get(hashApiKey(apiKey)) as unknown as {
     key_id: number;
     scopes: string;
     expires_at: string | null;

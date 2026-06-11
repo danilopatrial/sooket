@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
+import { hashApiKey, deriveKeyPrefix } from "@/lib/security/api-keys";
 
 type Params = { params: Promise<{ slug: string }> };
 
@@ -12,11 +13,6 @@ function getWorkflowId(slug: string): number | null {
   return row?.id ?? null;
 }
 
-function maskKey(key: string): string {
-  if (key.length <= 10) return key;
-  return `${key.slice(0, 10)}...${key.slice(-4)}`;
-}
-
 export async function GET(_req: Request, { params }: Params) {
   const { slug } = await params;
   const workflowId = getWorkflowId(slug);
@@ -24,10 +20,10 @@ export async function GET(_req: Request, { params }: Params) {
 
   const db = getDb();
   const rows = db.prepare(
-    `SELECT id, label, key, scopes, rate_limit_override, expires_at, last_used_at, is_active, created_at
+    `SELECT id, label, key_prefix, scopes, rate_limit_override, expires_at, last_used_at, is_active, created_at
      FROM workflow_api_keys WHERE workflow_id = ? ORDER BY created_at ASC`
   ).all(workflowId) as Array<{
-    id: number; label: string; key: string; scopes: string;
+    id: number; label: string; key_prefix: string | null; scopes: string;
     rate_limit_override: number | null; expires_at: string | null;
     last_used_at: string | null; is_active: number; created_at: string;
   }>;
@@ -35,7 +31,7 @@ export async function GET(_req: Request, { params }: Params) {
   const keys = rows.map((r) => ({
     id: r.id,
     label: r.label,
-    key_hint: maskKey(r.key),
+    key_hint: r.key_prefix ?? "",
     scopes: JSON.parse(r.scopes) as Scope[],
     rate_limit_override: r.rate_limit_override,
     expires_at: r.expires_at,
@@ -83,13 +79,15 @@ export async function POST(req: Request, { params }: Params) {
     expiresAt = d.toISOString();
   }
 
+  // The raw key is returned to the caller exactly once, below. Only its hash and
+  // a non-secret prefix are persisted, so it can never be retrieved again.
   const key = `sk-wf-${crypto.randomUUID().replace(/-/g, "")}`;
   const db = getDb();
 
   const { lastInsertRowid } = db.prepare(
-    `INSERT INTO workflow_api_keys (workflow_id, key, label, scopes, rate_limit_override, expires_at, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, 1)`
-  ).run(workflowId, key, label, scopes, rateLimitOverride, expiresAt) as { lastInsertRowid: number };
+    `INSERT INTO workflow_api_keys (workflow_id, key_hash, key_prefix, label, scopes, rate_limit_override, expires_at, is_active)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1)`
+  ).run(workflowId, hashApiKey(key), deriveKeyPrefix(key), label, scopes, rateLimitOverride, expiresAt) as { lastInsertRowid: number };
 
   const created = db.prepare(
     `SELECT id, label, scopes, rate_limit_override, expires_at, is_active, created_at
@@ -105,7 +103,7 @@ export async function POST(req: Request, { params }: Params) {
       id: created.id,
       label: created.label,
       key,
-      key_hint: maskKey(key),
+      key_hint: deriveKeyPrefix(key),
       scopes: JSON.parse(created.scopes) as Scope[],
       rate_limit_override: created.rate_limit_override,
       expires_at: created.expires_at,

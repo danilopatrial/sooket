@@ -37,7 +37,16 @@ from the client disconnecting, and the queued requests (`maxQueue=50`) wait
 classic head-of-line-blocking failure mode every gateway has to solve. Needs a
 hard execution budget + queue-wait timeout.
 
-### 1.2 API keys are stored in plaintext in SQLite
+### 1.2 API keys are stored in plaintext in SQLite — ✅ DONE (2026-06-11, sk-wf keys)
+Implemented: `sk-wf-*` keys are now stored only as a SHA-256 hash (`key_hash`,
+the new lookup column) plus a non-secret `key_prefix` display hint; the raw key
+is shown once at creation and is unrecoverable after. Migration 014 renames
+`key` → `key_hash`, hashes existing values, and hashes the vestigial
+`workflows.api_key` mirror in place. Auth looks up by hash. Helper in
+`lib/security/api-keys.ts`. Covered by unit + migration + route tests and QA
+spec SEC-11. **Still open:** the `sk-mw-*` management key in `settings` (it has
+retrieve-after-create semantics — needs a UX change before it can be hashed).
+
 `workflow_api_keys.key` holds the raw `sk-wf-*` string and lookup is
 `WHERE k.key = ?` (`lib/execution-handler.ts:69`). The management key `sk-mw-*`
 lives plaintext in the `settings` table. There's no hashing (SHA-256/argon at
@@ -250,3 +259,25 @@ flaw exactly — just friction I'd weigh before standardizing a team on it.
 5. **1.6 PBKDF2 cache+bump, 1.4 constant-time webhook compare** — cheap wins.
 6. **1.5 SSRF egress controls** — before anyone exposes this beyond loopback.
 7. Everything in §2 as roadmap, §3 as documentation/positioning honesty.
+
+---
+
+## 6. Health endpoint: add readiness check (DB probe)
+
+`/api/health` is currently a pure liveness probe — it returns `ok` without
+touching SQLite, so it can't distinguish "process up" from "up but DB
+unwritable" (full volume, bad mount, locked file). Orchestrators (Docker
+healthchecks, k8s/Fly-style probes, future hosted control plane) need that
+distinction to know when to route traffic vs. restart/alert.
+
+- [ ] Add readiness mode: `GET /api/health?ready=1` (or a separate `/api/health/ready`)
+- [ ] Probe: trivial DB round-trip — open handle + `SELECT 1`, plus a write
+      check (e.g. `PRAGMA user_version` read or insert/delete on a probe row)
+- [ ] Response: extend body with `checks: { db: "ok" | "error" }`; return
+      HTTP 503 when any check fails (orchestrators key off status code)
+- [ ] Keep the probe cheap (<5 ms) and unauthenticated — must stay in
+      `isPublicPath()`
+- [ ] Tests: healthy path, missing/readonly DB file path
+- [ ] Document in `.env.example` / docs alongside the existing health note
+
+Liveness behavior (`GET /api/health` with no flag) stays exactly as-is.

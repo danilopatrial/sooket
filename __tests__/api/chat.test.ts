@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DatabaseSync } from "node:sqlite";
 import { ALL_MIGRATIONS } from "@/lib/db/migrations";
 import { runMigrations } from "@/lib/db/run-migrations";
+import { hashApiKey, deriveKeyPrefix } from "@/lib/security/api-keys";
 
 // Prevent fire-and-forget DB writes from interfering between tests
 vi.stubGlobal("setImmediate", vi.fn());
@@ -58,11 +59,12 @@ function seedKey(
   } = opts;
   const { lastInsertRowid } = db.prepare(
     `INSERT INTO workflows (slug, name, api_key, is_active) VALUES (?,?,?,?)`
-  ).run("wf-slug", "Test WF", "sk-wf-legacy", isActive) as { lastInsertRowid: number };
+  ).run("wf-slug", "Test WF", hashApiKey("sk-wf-legacy"), isActive) as { lastInsertRowid: number };
+  // Keys are stored hashed; seed the hash + prefix of the raw key tests present.
   db.prepare(
-    `INSERT INTO workflow_api_keys (workflow_id, key, scopes, is_active, expires_at, rate_limit_override)
-     VALUES (?,?,?,?,?,?)`
-  ).run(Number(lastInsertRowid), "sk-wf-valid", scopes, keyActive, expiresAt, rateLimitOverride);
+    `INSERT INTO workflow_api_keys (workflow_id, key_hash, key_prefix, scopes, is_active, expires_at, rate_limit_override)
+     VALUES (?,?,?,?,?,?,?)`
+  ).run(Number(lastInsertRowid), hashApiKey("sk-wf-valid"), deriveKeyPrefix("sk-wf-valid"), scopes, keyActive, expiresAt, rateLimitOverride);
 }
 
 let db: DatabaseSync;
@@ -121,8 +123,8 @@ describe("handleExecutionRequest — auth flow", () => {
   it("429 when per-key rate limit is already at the ceiling", async () => {
     seedKey(db, { rateLimitOverride: 5 });
     const keyRow = db.prepare(
-      `SELECT id FROM workflow_api_keys WHERE key = ?`
-    ).get("sk-wf-valid") as { id: number };
+      `SELECT id FROM workflow_api_keys WHERE key_hash = ?`
+    ).get(hashApiKey("sk-wf-valid")) as { id: number };
     const windowStart = Math.floor(Date.now() / 60_000);
     db.prepare(
       `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?,?,5)`
@@ -134,8 +136,8 @@ describe("handleExecutionRequest — auth flow", () => {
   it("still allows when count is one below the rate limit", async () => {
     seedKey(db, { rateLimitOverride: 3 });
     const keyRow = db.prepare(
-      `SELECT id FROM workflow_api_keys WHERE key = ?`
-    ).get("sk-wf-valid") as { id: number };
+      `SELECT id FROM workflow_api_keys WHERE key_hash = ?`
+    ).get(hashApiKey("sk-wf-valid")) as { id: number };
     const windowStart = Math.floor(Date.now() / 60_000);
     db.prepare(
       `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?,?,2)`

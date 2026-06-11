@@ -73,11 +73,14 @@ describe("POST /api/workflows — create", () => {
       `SELECT id FROM workflows WHERE slug = ?`
     ).get("test-slug-001") as { id: number };
     const key = dbHolder.current!.prepare(
-      `SELECT key, scopes, is_active FROM workflow_api_keys WHERE workflow_id = ?`
-    ).get(wf.id) as { key: string; scopes: string; is_active: number } | undefined;
+      `SELECT key_hash, key_prefix, scopes, is_active FROM workflow_api_keys WHERE workflow_id = ?`
+    ).get(wf.id) as { key_hash: string; key_prefix: string; scopes: string; is_active: number } | undefined;
     expect(key).toBeDefined();
     expect(key!.is_active).toBe(1);
     expect(JSON.parse(key!.scopes)).toContain("execute");
+    // Stored hashed, never as the raw sk-wf-* secret.
+    expect(key!.key_hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(key!.key_prefix).toMatch(/^sk-wf-/);
   });
 });
 
