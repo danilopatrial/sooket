@@ -1,4 +1,4 @@
-import { deriveKey } from "@/lib/crypto";
+import { decrypt } from "@/lib/crypto";
 
 export function toText(value: unknown): string {
   if (value === null || value === undefined) return "";
@@ -23,21 +23,11 @@ export function resolveVars(text: string, vars: Map<string, string>): string {
   return text.replace(/\$([A-Z][A-Z0-9_]*)/g, (_, name: string) => vars.get(name) ?? `$${name}`);
 }
 
-export function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
-  return bytes;
-}
-
 export async function decryptValue(ciphertextHex: string, secret: string): Promise<string> {
-  // Key derivation is the single implementation in lib/crypto.ts so the encrypt
-  // and decrypt paths can never drift apart (same salt, iterations, and hash).
-  const key = await deriveKey(secret);
-  const combined = hexToBytes(ciphertextHex);
-  const iv = combined.slice(0, 12);
-  const ciphertext = combined.slice(12);
-  const plaintext = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
-  return new TextDecoder().decode(plaintext);
+  // Delegate to the single decrypt implementation in lib/crypto.ts so the
+  // encrypt and decrypt paths can never drift apart (same salt, iterations,
+  // hash) and this path inherits the memoised key + legacy-iteration fallback.
+  return decrypt(ciphertextHex, secret);
 }
 
 export function getNestedValue(obj: Record<string, unknown>, path: string): unknown {

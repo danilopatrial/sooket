@@ -98,7 +98,15 @@ callers, not *outbound* targets. For a tool whose whole job is making outbound
 calls, this is the SSRF surface I'd worry about most, especially when URLs can
 come from request bodies.
 
-### 1.6 PBKDF2 is both too weak and re-derived on every call
+### 1.6 PBKDF2 is both too weak and re-derived on every call — ✅ DONE (2026-06-11)
+Implemented: `deriveKey` is now memoised per (iterations, salt, secret), so the
+hot path no longer pays `N_vars × PBKDF2` per request — one derivation per
+process eliminates the latency tax and CPU-DoS amplifier. Iterations raised
+100k → **600k** (OWASP 2023) for new data; `decrypt` falls back to 100k so
+existing ciphertext still reads (no format change, no data loss). `decryptValue`
+now delegates to `crypto.decrypt` (dedup + inherits the cache/fallback). Covered
+by unit tests + QA specs SEC-01 (updated) and SEC-13 (upgrade safety).
+
 `lib/crypto.ts` uses PBKDF2-SHA256 at **100,000 iterations**. OWASP's current
 guidance is ~600k+ for PBKDF2-SHA256; 100k is a 2015 number. Worse, `deriveKey()`
 runs the full 100k iterations on **every** encrypt and decrypt — and

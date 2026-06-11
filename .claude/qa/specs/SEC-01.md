@@ -40,8 +40,12 @@ Verifies that provider keys and credentials stored in the database are encrypted
       var, falling back to `"sooket-salt"` when unset or empty (legacy/back-compat
       default). The same resolver is used by `lib/nodes/utils.ts` so encrypt and
       decrypt always agree within a deployment
-    - PBKDF2 iterations: 100,000
+    - PBKDF2 iterations: 600,000 for all new encryptions (`PBKDF2_ITERATIONS`,
+      OWASP 2023 floor); `decrypt` also tries 100,000 (`LEGACY_PBKDF2_ITERATIONS`)
+      so data written before the bump still reads. See SEC-13.
     - PBKDF2 hash: SHA-256
+    - Derived keys are memoised per (iterations, salt, secret), so raising the
+      iteration count does not add per-operation cost (one derivation per process)
     - IV: 12 bytes (randomly generated per encryption)
     - Stored format: lowercase hex string of `IV (12 bytes) || ciphertext`
 
@@ -75,4 +79,4 @@ Verifies that provider keys and credentials stored in the database are encrypted
 Provider API keys grant direct access to third-party services (Anthropic, Pinecone, etc.); plaintext storage would expose all keys to anyone with database read access.
 
 ## Source reference
-`lib/crypto.ts` (AES-GCM algorithm, `getEncryptionSalt()` resolving the PBKDF2 salt from `ENCRYPTION_SALT` with a `"sooket-salt"` fallback, PBKDF2 key derivation with 100,000 iterations + SHA-256, 12-byte random IV, hex encoding of `IV || ciphertext`); `lib/nodes/utils.ts` (`decryptValue` reuses `getEncryptionSalt()` so its decrypt-only key derivation matches `lib/crypto.ts`).
+`lib/crypto.ts` (AES-GCM algorithm, `getEncryptionSalt()` resolving the PBKDF2 salt from `ENCRYPTION_SALT` with a `"sooket-salt"` fallback, memoised PBKDF2 key derivation at `PBKDF2_ITERATIONS` = 600,000 + SHA-256 with a 100,000-iteration legacy fallback in `decrypt`, 12-byte random IV, hex encoding of `IV || ciphertext`); `lib/nodes/utils.ts` (`decryptValue` now delegates to `crypto.decrypt`, so the runtime decrypt path inherits the same salt, iteration fallback, and key cache).
