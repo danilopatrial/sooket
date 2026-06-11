@@ -21,6 +21,7 @@ vi.mock("node:dns/promises", () => {
 import { execute as httpRequestExec }      from "@/lib/nodes/http-request";
 import { execute as webhookExec }          from "@/lib/nodes/webhook";
 import { execute as anthropicExec }        from "@/lib/nodes/anthropic";
+import { execute as openaiExec }            from "@/lib/nodes/openai";
 import { execute as promptCompressionExec }from "@/lib/nodes/prompt-compression";
 import { getDb } from "@/lib/db";
 import { makeNode, makeCtx, wireInput } from "./helpers";
@@ -333,6 +334,100 @@ describe("anthropic executor", () => {
     });
     await expect(anthropicExec.execute(makeNode("anthropic", {}), null, ctx))
       .rejects.toThrow(); // either decrypt or empty message error
+  });
+});
+
+// ─── OpenAI ───────────────────────────────────────────────────────────────────
+
+describe("openai executor", () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  const makeOpenaiCtx = (userPrompt: string, providerKey: string | null = "sk-openai-test") => {
+    const fakeNode: WorkflowNode = { id: "upstream", type: "text", data: {} };
+    return makeCtx({
+      workflow: { id: 1, nodes: [], edges: [], is_active: 1 },
+      getProviderKey: async () => providerKey,
+      inputFor: (h) => h === "userPrompt" ? { node: fakeNode, sourceHandle: null } : null,
+      evalInput: async () => ({ value: userPrompt, inputTokens: 0, outputTokens: 0 }),
+    });
+  };
+
+  const okResponse = {
+    choices: [{ message: { content: "Hello from GPT!" } }],
+    usage: { prompt_tokens: 12, completion_tokens: 7 },
+  };
+
+  it("throws when no OpenAI API key is configured", async () => {
+    const ctx = makeOpenaiCtx("hello", null);
+    await expect(openaiExec.execute(makeNode("openai", { model: "gpt-4o-mini" }), null, ctx))
+      .rejects.toThrow("No OpenAI API key");
+  });
+
+  it("calls /chat/completions and returns text + token usage", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => okResponse, text: async () => JSON.stringify(okResponse) });
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = makeOpenaiCtx("hi there");
+    const r = await openaiExec.execute(
+      makeNode("openai", { model: "gpt-4o-mini", systemPrompt: "Be terse", temperature: 0.3, baseURL: "https://api.openai.com/v1" }),
+      null, ctx,
+    );
+    expect(r.value).toBe("Hello from GPT!");
+    expect(r.inputTokens).toBe(12);
+    expect(r.outputTokens).toBe(7);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://api.openai.com/v1/chat/completions");
+    const body = JSON.parse((init as { body: string }).body);
+    expect(body.model).toBe("gpt-4o-mini");
+    expect(body.temperature).toBe(0.3);
+    // system message first, user message last
+    expect(body.messages[0]).toEqual({ role: "system", content: "Be terse" });
+    expect(body.messages[body.messages.length - 1]).toEqual({ role: "user", content: "hi there" });
+    expect((init as { headers: Record<string, string> }).headers.Authorization).toBe("Bearer sk-openai-test");
+  });
+
+  it("targets a custom OpenAI-compatible base URL (e.g. local Ollama), trimming trailing slashes", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => okResponse, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = makeOpenaiCtx("hi");
+    await openaiExec.execute(
+      makeNode("openai", { model: "llama3", baseURL: "http://localhost:11434/v1/" }),
+      null, ctx,
+    );
+    expect(fetchMock.mock.calls[0][0]).toBe("http://localhost:11434/v1/chat/completions");
+  });
+
+  it("omits the system message when systemPrompt is empty", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => okResponse, text: async () => "" });
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = makeOpenaiCtx("hi");
+    await openaiExec.execute(makeNode("openai", { model: "gpt-4o-mini", systemPrompt: "" }), null, ctx);
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.messages.every((m: { role: string }) => m.role !== "system")).toBe(true);
+  });
+
+  it("throws when the user message is empty", async () => {
+    const ctx = makeOpenaiCtx("   ");
+    await expect(openaiExec.execute(makeNode("openai", { model: "gpt-4o-mini" }), null, ctx))
+      .rejects.toThrow(/user message is empty/);
+  });
+
+  it("surfaces an upstream provider error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, text: async () => "401 invalid key" }));
+    const ctx = makeOpenaiCtx("hi");
+    await expect(openaiExec.execute(makeNode("openai", { model: "gpt-4o-mini" }), null, ctx))
+      .rejects.toThrow(/Upstream provider error: 401 invalid key/);
+  });
+
+  it("propagates inactive from the userPrompt input", async () => {
+    const fakeNode: WorkflowNode = { id: "upstream", type: "text", data: {} };
+    const ctx = makeCtx({
+      getProviderKey: async () => "sk-openai-test",
+      inputFor: (h) => h === "userPrompt" ? { node: fakeNode, sourceHandle: null } : null,
+      evalInput: async () => ({ value: undefined, active: false, inputTokens: 0, outputTokens: 0 }),
+    });
+    const r = await openaiExec.execute(makeNode("openai", { model: "gpt-4o-mini" }), null, ctx);
+    expect(r.active).toBe(false);
   });
 });
 

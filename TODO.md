@@ -198,7 +198,19 @@ needs safe retries for non-idempotent pipelines (one that charges a card, sends
 an email, writes to a downstream system). Today a client retry = duplicate
 side effects.
 
-### 2.3 Multi-provider LLM support
+### 2.3 Multi-provider LLM support — ✅ DONE (2026-06-11, OpenAI-compatible node)
+Added a first-class **OpenAI** node (`lib/nodes/openai.ts` + `OpenAINode.tsx`)
+speaking the OpenAI `/chat/completions` shape with a configurable `baseURL`, so a
+single node covers OpenAI plus Together/Groq/OpenRouter and local Ollama/LM Studio.
+Reads the `openai` provider key, mirrors the Anthropic node's input handles
+(model/systemPrompt/temperature/history/userPrompt → output), and surfaces token
+usage. Registered in both registries. Covered by executor tests (7) + canvas
+tests (21); QA spec NODE-AI-09; catalogue updated in AGENTS.md. SSRF guard
+intentionally not applied to the provider base URL (local models are a primary
+use case). **Still open as future scope:** Gemini/Bedrock-native nodes and a
+provider-agnostic "chat" node — the OpenAI-compatible node covers most of these
+via baseURL already.
+
 The only first-class model node is Anthropic. No OpenAI / OpenAI-compatible /
 Gemini / Bedrock / local-Ollama node, and no provider-agnostic "chat" node. You
 can bolt providers on via the raw HTTP node, but then you lose token accounting,

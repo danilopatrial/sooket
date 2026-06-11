@@ -25,6 +25,16 @@ export interface AnthropicNodeData {
   onChange?: (data: Partial<AnthropicNodeData>) => void;
 }
 
+export interface OpenAINodeData {
+  model: string;
+  systemPrompt: string;
+  temperature: number;
+  /** OpenAI-compatible base URL (default https://api.openai.com/v1). */
+  baseURL: string;
+  connectedHandles?: string[];
+  onChange?: (data: Partial<OpenAINodeData>) => void;
+}
+
 export interface ComplexityNodeData {
   testPrompt: string;
   lastScore: number | null;

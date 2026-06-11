@@ -231,7 +231,8 @@ calls it (there are no per-node `case` blocks). The registry is keyed by version
 existing workflows stay pinned to their saved `typeVersion`. Canvas components
 live in `components/canvas/nodes/`, execution logic in `lib/nodes/`.
 
-**AI**: Token Counter, Complexity Score, Sentiment, Anthropic, Prompt Compression
+**AI**: Token Counter, Complexity Score, Sentiment, Anthropic, OpenAI
+(OpenAI-compatible; configurable `baseURL`), Prompt Compression
 
 **Request**: Output (exit point), Response Builder, List Manager, Access List,
 Auth Validator

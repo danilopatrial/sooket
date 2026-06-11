@@ -6,10 +6,11 @@ import {
   ShieldAlert, Link2, List, KeyRound, Clock, Type, Calculator,
   Ruler, ToggleLeft, AlignLeft, Binary, ArrowLeft, Combine,
   Regex, Shuffle, Shield, ListPlus, Merge, Bug, FileCode2, Languages, Layers, BrainCircuit,
-  Webhook, RotateCcw, Timer, ScanEye, Replace, Minimize2, Dices,
+  Webhook, RotateCcw, Timer, ScanEye, Replace, Minimize2, Dices, Bot,
 } from "lucide-react";
 import type { NodeProps } from "@xyflow/react";
 import { AnthropicNode } from "./AnthropicNode";
+import { OpenAINode } from "./OpenAINode";
 import { TextNode } from "./TextNode";
 import { NumberNode } from "./NumberNode";
 import { JsonParserNode } from "./JsonParserNode";
@@ -135,6 +136,18 @@ export const NODE_REGISTRY: NodeDef[] = [
     icon: Sparkles,
     category: "ai",
     defaultData: { model: "claude-sonnet-4-6", systemPrompt: "You are a helpful assistant", temperature: 0.7 },
+    primaryInput: "userPrompt",
+    primaryOutput: "output",
+  },
+  {
+    type: "openai",
+    component: OpenAINode,
+    label: "OpenAI",
+    sub: "GPT & OpenAI-compatible",
+    color: "bg-emerald-500",
+    icon: Bot,
+    category: "ai",
+    defaultData: { model: "gpt-4o-mini", systemPrompt: "You are a helpful assistant", temperature: 0.7, baseURL: "https://api.openai.com/v1" },
     primaryInput: "userPrompt",
     primaryOutput: "output",
   },

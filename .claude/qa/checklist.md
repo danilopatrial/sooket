@@ -189,6 +189,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [NODE-AI-06] Complexity node — heuristic-only for scores outside 0.25–0.70; embedding refine only in that range — [spec](specs/NODE-AI-06.md)
 - [x] [NODE-AI-07] Sentiment node — returns score, label, and routes to positive/neutral/negative handles — [spec](specs/NODE-AI-07.md)
 - [x] [NODE-AI-08] Prompt Compression node — compresses long input via Haiku before passing to main LLM — [spec](specs/NODE-AI-08.md)
+- [x] [NODE-AI-09] OpenAI node — calls OpenAI-compatible /chat/completions with configurable baseURL, returns text + token usage — [spec](specs/NODE-AI-09.md)
 
 ---
 

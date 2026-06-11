@@ -40,6 +40,7 @@ import { execute as tryCatch        } from "./try-catch";
 import { execute as retry           } from "./retry";
 import { execute as rateLimiter     } from "./rate-limiter";
 import { execute as anthropic       } from "./anthropic";
+import { execute as openai          } from "./openai";
 import { execute as contentGuardrail} from "./content-guardrail";
 import { execute as promptCompression}from "./prompt-compression";
 import { execute as authValidator   } from "./auth-validator";
@@ -91,6 +92,7 @@ export const NODE_EXECUTOR_REGISTRY: NodeVersionRegistry = {
   "retry":          { 1: retry },
   "rate-limiter":   { 1: rateLimiter },
   "anthropic":      { 1: anthropic },
+  "openai":         { 1: openai },
   "content-guardrail":  { 1: contentGuardrail },
   "prompt-compression": { 1: promptCompression },
   "auth-validator":     { 1: authValidator },
