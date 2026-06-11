@@ -1,5 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
+// The http-request executor used below runs the SSRF egress guard, which
+// resolves hostnames. Mock DNS so these tests never touch the network: the
+// example.com hosts they use resolve to a public IP.
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async () => [{ address: "93.184.216.34", family: 4 }]);
+  return { lookup, default: { lookup } };
+});
+
 // Set memory backend before importing so the singleton is constructed with it
 process.env.BINARY_DATA_BACKEND = "memory";
 

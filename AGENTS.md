@@ -320,6 +320,13 @@ SOOKET_AUTH_TOKEN            # Optional shared secret. When set, proxy.ts gates 
                              # health routes keep their own auth and are exempt.
 SOOKET_HOST                  # Bind interface (default 127.0.0.1). Non-loopback bind
                              # without SOOKET_AUTH_TOKEN triggers a startup warning.
+SOOKET_ALLOW_PRIVATE_EGRESS  # Optional. When set (1/true/yes/on), disables the SSRF
+                             # egress guard so HTTP Request / Webhook nodes may call
+                             # private/loopback/link-local targets. Off by default:
+                             # those nodes block internal addresses (incl. cloud
+                             # metadata) and private-resolving hostnames. Only enable
+                             # on a trusted, non-multi-tenant deployment that needs to
+                             # reach internal services. See lib/security/ssrf.ts.
 ```
 
 ## Authentication & exposure

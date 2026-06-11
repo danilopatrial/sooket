@@ -317,6 +317,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [SEC-11] Workflow API keys are stored hashed (SHA-256), looked up by hash, and unrecoverable after creation — [spec](specs/SEC-11.md)
 - [x] [SEC-12] Custom Code node resists the constructor-chain sandbox escape (no host realm reachable) — [spec](specs/SEC-12.md)
 - [x] [SEC-13] Existing encrypted secrets still decrypt after the PBKDF2 iteration bump (100k→600k upgrade safety) — [spec](specs/SEC-13.md)
+- [x] [SEC-14] HTTP Request / Webhook nodes block SSRF to internal/private targets (opt-out via SOOKET_ALLOW_PRIVATE_EGRESS) — [spec](specs/SEC-14.md)
 
 ---
 

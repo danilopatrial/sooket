@@ -2,6 +2,7 @@ import type { INodeExecutor, NodeContext } from "./types";
 import type { WorkflowNode, EvalResult } from "@/lib/workflow-types";
 import type { HttpRequestNodeData } from "@/lib/node-types";
 import { toText, resolveVars } from "./utils";
+import { assertEgressAllowed } from "@/lib/security/ssrf";
 
 class HttpRequestNode implements INodeExecutor {
   async execute(node: WorkflowNode, sourceHandle: string | null | undefined, ctx: NodeContext) {
@@ -26,6 +27,9 @@ class HttpRequestNode implements INodeExecutor {
     for (const h of headers) {
       if (h.key && h.value) httpHeaders[h.key] = resolveVars(h.value, ctx.vars);
     }
+
+    // SSRF guard: reject internal/private targets before opening any connection.
+    await assertEgressAllowed(requestUrl);
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeout);

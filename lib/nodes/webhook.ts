@@ -2,6 +2,7 @@ import type { INodeExecutor, NodeContext } from "./types";
 import type { WorkflowNode } from "@/lib/workflow-types";
 import type { WebhookNodeData } from "@/lib/node-types";
 import { toText, resolveVars } from "./utils";
+import { assertEgressAllowed } from "@/lib/security/ssrf";
 
 class WebhookNode implements INodeExecutor {
   async execute(node: WorkflowNode, _sourceHandle: string | null | undefined, ctx: NodeContext) {
@@ -54,6 +55,10 @@ class WebhookNode implements INodeExecutor {
     }
 
     if (webhookUrl) {
+      // SSRF guard: blind fire-and-forget requests are still SSRF — vet the
+      // target before sending. A blocked URL surfaces as a node error rather
+      // than silently hitting an internal endpoint.
+      await assertEgressAllowed(webhookUrl);
       fetch(webhookUrl, { method, headers: httpHeaders, body: requestBody }).catch(() => {});
     }
 

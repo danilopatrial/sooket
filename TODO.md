@@ -93,7 +93,17 @@ with a plain `!==`. The management surface correctly uses `safeEqual()`
 (per AGENTS.md), but the webhook path doesn't — it's timing-attackable. Small,
 but it's a one-line fix and an obvious inconsistency.
 
-### 1.5 SSRF: the HTTP Request node has no egress controls
+### 1.5 SSRF: the HTTP Request node has no egress controls — ✅ DONE (2026-06-11)
+Implemented `lib/security/ssrf.ts` (`assertEgressAllowed`): requires http/https,
+blocks private/reserved/loopback/link-local IPs (v4+v6, incl. cloud metadata and
+IPv4-mapped) via `net.BlockList`, resolves hostnames and rejects if any address
+is private (catches DNS-based SSRF), fails closed on resolution failure. Wired
+into the HTTP Request node and the Webhook (action) node before `fetch`. Secure
+by default; opt out per-deployment with `SOOKET_ALLOW_PRIVATE_EGRESS`. Covered by
+unit tests (41) + node tests + QA spec SEC-14; env var documented in AGENTS.md.
+**Residual:** not a perfect DNS-rebinding defense (TOCTOU between check and
+connect, since `fetch` can't pin to the validated IP) — noted in the spec.
+
 `lib/nodes/http-request.ts` will `fetch` any URL the workflow author (or an
 interpolated `{{ }}` value / upstream node output) produces — including
 `http://169.254.169.254/…` cloud metadata, `http://localhost:…` admin ports, and

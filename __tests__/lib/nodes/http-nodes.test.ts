@@ -6,6 +6,18 @@ vi.mock("@/lib/db", () => {
   return { getDb: () => mockDb };
 });
 
+// Mock DNS so the SSRF egress guard never hits the network: every hostname
+// resolves to a public IP, except a designated internal host used to exercise
+// DNS-based SSRF blocking. IP-literal URLs need no resolution.
+vi.mock("node:dns/promises", () => {
+  const lookup = vi.fn(async (host: string) =>
+    host === "internal.ssrf.test"
+      ? [{ address: "10.0.0.5", family: 4 }]
+      : [{ address: "93.184.216.34", family: 4 }],
+  );
+  return { lookup, default: { lookup } };
+});
+
 import { execute as httpRequestExec }      from "@/lib/nodes/http-request";
 import { execute as webhookExec }          from "@/lib/nodes/webhook";
 import { execute as anthropicExec }        from "@/lib/nodes/anthropic";
@@ -160,6 +172,32 @@ describe("http-request executor", () => {
       )
     ).rejects.toThrow(/timed out after 10 ms/);
   });
+
+  it("blocks an SSRF target (cloud metadata IP) and never calls fetch", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      httpRequestExec.execute(
+        makeNode("http-request", { method: "GET", url: "http://169.254.169.254/latest/meta-data/", headers: [], timeout: 5000 }),
+        null,
+        makeCtx()
+      )
+    ).rejects.toThrow(/Blocked egress/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks a hostname that resolves to a private address (DNS-based SSRF)", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(
+      httpRequestExec.execute(
+        makeNode("http-request", { method: "GET", url: "http://internal.ssrf.test/", headers: [], timeout: 5000 }),
+        null,
+        makeCtx()
+      )
+    ).rejects.toThrow(/Blocked egress/);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
 // ─── Webhook ──────────────────────────────────────────────────────────────────
@@ -207,6 +245,20 @@ describe("webhook executor", () => {
       null,
       ctx
     );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("blocks an SSRF target and never fires the background request", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const ctx = makeCtx({ ...wireInput("input", "data") });
+    await expect(
+      webhookExec.execute(
+        makeNode("webhook", { url: "http://127.0.0.1:9000/internal", method: "POST", headers: [], bodyTemplate: "" }),
+        null,
+        ctx
+      )
+    ).rejects.toThrow(/Blocked egress/);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
