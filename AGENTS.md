@@ -172,7 +172,12 @@ on the user's own machine or server.
 
 Local SQLite via Node.js built-in `node:sqlite`. File at `data/sooket.db`
 (auto-created). Location overridable via `SOOKET_DATA_DIR` env var. The
-singleton connection lives in `lib/db/index.ts`. Schema changes are applied as
+singleton connection lives in `lib/db/index.ts`. Every connection is opened via
+`applyConnectionPragmas()` which sets `busy_timeout` (SQLite's native
+retry/backoff for write contention; default 5000 ms, override with
+`SOOKET_BUSY_TIMEOUT_MS`), `journal_mode = WAL`, and `foreign_keys = ON` — these
+are per-connection settings, so they're applied on each open rather than via a
+one-time migration. Schema changes are applied as
 ordered migrations: numbered files in `lib/db/migrations/` (e.g.
 `012-workflow-webhook-token.ts`) run via `lib/db/run-migrations.ts` on startup,
 with applied migrations tracked by name in the `schema_migrations` table. Add a
@@ -327,6 +332,11 @@ SOOKET_ALLOW_PRIVATE_EGRESS  # Optional. When set (1/true/yes/on), disables the 
                              # metadata) and private-resolving hostnames. Only enable
                              # on a trusted, non-multi-tenant deployment that needs to
                              # reach internal services. See lib/security/ssrf.ts.
+SOOKET_BUSY_TIMEOUT_MS       # Optional. SQLite busy_timeout in ms (default 5000) — how
+                             # long a contended write waits for the lock before failing,
+                             # instead of throwing SQLITE_BUSY immediately. Matters when
+                             # the execution server shares the DB file with Next.js. 0
+                             # disables waiting (fail fast). See lib/db/index.ts.
 ```
 
 ## Authentication & exposure

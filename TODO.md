@@ -149,7 +149,19 @@ For a feature literally called "rate limiter" I'd expect at least a sliding-wind
 or token-bucket option. They're also two independent implementations of the same
 concept that don't share counters or semantics.
 
-### 1.8 No graceful handling of SQLite write contention
+### 1.8 No graceful handling of SQLite write contention — ✅ DONE (2026-06-11)
+Implemented `applyConnectionPragmas()` in `lib/db/index.ts`, applied on every
+connection open: sets `busy_timeout` (SQLite's native retry/backoff — a contended
+write now waits instead of throwing `SQLITE_BUSY` immediately; default 5000 ms,
+`SOOKET_BUSY_TIMEOUT_MS`) and re-asserts `journal_mode = WAL` + `foreign_keys`.
+Per-connection settings, so applied on open rather than via a one-time migration;
+covers both the Next.js process and the execution server sharing the file.
+Covered by unit tests (resolver + pragma application) and a real two-connection
+contention test proving the wait; QA spec EDGE-10; env documented in AGENTS.md.
+Note: `node:sqlite` is synchronous so the wait blocks that connection's call —
+busy_timeout (native, efficient) is the right tool; an app-level synchronous
+retry would busy-spin the event loop, so it was deliberately not added.
+
 Everything funnels through one `DatabaseSync` connection (`lib/db/index.ts`).
 WAL lets readers run concurrently, but writers still serialize and can throw
 `SQLITE_BUSY` under concurrent execution logging / counter updates. I see no

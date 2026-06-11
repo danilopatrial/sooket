@@ -363,6 +363,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [EDGE-07] Sub-workflow depth exceeds 5 — returns a clear error without crashing — [spec](specs/EDGE-07.md)
 - [x] [EDGE-08] A/B Split node with weights not summing to 100% — UI warns, execution behavior is defined — [spec](specs/EDGE-08.md)
 - [x] [EDGE-09] Import of a JSON file with invalid structure shows a clear validation error — [spec](specs/EDGE-09.md)
+- [x] [EDGE-10] SQLite write contention: busy_timeout makes contended writes wait instead of throwing SQLITE_BUSY (no intermittent 500s) — [spec](specs/EDGE-10.md)
 
 ---
 
