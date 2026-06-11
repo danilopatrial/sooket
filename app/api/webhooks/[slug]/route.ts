@@ -7,6 +7,7 @@ import { CORS_HEADERS } from "@/lib/execution-handler";
 import type { EvalResult } from "@/lib/workflow-types";
 import { executionSemaphore } from "@/lib/concurrency";
 import { readLimitedText, RequestBodyTooLargeError } from "@/lib/request-limit";
+import { safeEqual } from "@/lib/security/auth";
 
 const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET!;
 
@@ -43,9 +44,11 @@ async function handleWebhook(request: Request, slug: string): Promise<Response> 
   }
 
   // Token verification first — prevents leaking active/inactive state to unauthenticated callers.
+  // Compare in constant time (safeEqual) so the webhook token can't be recovered
+  // byte-by-byte via response-timing, matching how the management surface compares secrets.
   if (workflowRow.webhook_token) {
     const provided = extractToken(request);
-    if (!provided || provided !== workflowRow.webhook_token) {
+    if (!provided || !safeEqual(provided, workflowRow.webhook_token)) {
       return NextResponse.json({ error: "Invalid or missing webhook token" }, { status: 401, headers: CORS_HEADERS });
     }
   }

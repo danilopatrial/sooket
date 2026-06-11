@@ -140,6 +140,24 @@ describe("POST /api/webhooks/[slug] — token verification", () => {
     expect(res.status).toBe(200);
   });
 
+  it("rejects a wrong token of the SAME length (constant-time compare returns false, not by length)", async () => {
+    seedWorkflow(dbHolder.current!, { token: "abcd1234" });
+    const res = await POST(
+      makeReq("http://localhost/api/webhooks/wf-slug", { "x-webhook-secret": "abcd9999" }),
+      params("wf-slug"),
+    );
+    expect(res.status).toBe(401);
+  });
+
+  it("accepts the correct token (same byte length path through the constant-time compare)", async () => {
+    seedWorkflow(dbHolder.current!, { token: "abcd1234" });
+    const res = await POST(
+      makeReq("http://localhost/api/webhooks/wf-slug", { "x-webhook-secret": "abcd1234" }),
+      params("wf-slug"),
+    );
+    expect(res.status).toBe(200);
+  });
+
   it("200 when correct token is provided via ?token= query param", async () => {
     seedWorkflow(dbHolder.current!, { token: "secret" });
     const res = await POST(

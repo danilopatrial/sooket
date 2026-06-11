@@ -82,7 +82,12 @@ workflow gets RCE on the host. Either drop the pretense (document it as "runs
 with full host privileges, treat workflow-edit as shell access") or move to a
 real isolate (`isolated-vm`, a subprocess with seccomp, or a WASM runtime).
 
-### 1.4 Webhook token comparison is not constant-time
+### 1.4 Webhook token comparison is not constant-time — ✅ DONE (2026-06-11)
+Implemented: the webhook route now compares the token with `safeEqual()`
+(constant-time `timingSafeEqual`) instead of `!==`, matching the management
+surface. Covered by unit tests (same-length wrong/correct token) + QA spec
+WEBHOOK-04 (updated).
+
 `app/api/webhooks/[slug]/route.ts` compares `provided !== workflowRow.webhook_token`
 with a plain `!==`. The management surface correctly uses `safeEqual()`
 (per AGENTS.md), but the webhook path doesn't — it's timing-attackable. Small,
