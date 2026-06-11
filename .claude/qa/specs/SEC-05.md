@@ -96,4 +96,22 @@ Verifies that code executed in the Custom Code node cannot access Node.js proces
 A sandbox escape in the Custom Code node would allow arbitrary server-side code execution, including reading secrets from the environment and accessing the database.
 
 ## Source reference
-`lib/nodes/custom-code.ts` lines 16-34 (sandbox object: explicitly lists `input, JSON, Math, Number, String, Boolean, Array, Object, Date, parseInt, parseFloat, isNaN, isFinite, Infinity, NaN, console`; no `require`, `process`, `Buffer`, `global`, or `fetch`), line 36 (`vm.createContext(sandbox)` — sets sandbox as the global scope).
+`lib/nodes/custom-code.ts` — the executor builds a **null-prototype** vm context
+(`Object.create(null)`) and injects **no** host primordials or host functions.
+The context's own ECMAScript intrinsics (`JSON`, `Math`, `Number`, `String`,
+`Boolean`, `Array`, `Object`, `Date`, `parseInt`, `parseFloat`, `isNaN`,
+`isFinite`, `Infinity`, `NaN`, plus `Promise`/`Map`/`Set`/`RegExp`) remain
+available because a contextified global carries them, while `require`, `process`,
+`Buffer`, `global`, `fetch`, `module`, `exports`, and host timers are absent.
+`console` is a silenced, context-local no-op installed on `globalThis` by the
+wrapper prelude. `input` is JSON-cloned into the context (`JSON.parse(<literal>)`)
+so it is not a live host-object handle.
+
+## Notes
+This spec covers the high-level "no Node.js access." The specific
+constructor-chain escape that the host-primordial injection used to allow —
+`input.constructor.constructor("return process")()` — is covered by **SEC-12**.
+Host timers (`setTimeout`/`clearTimeout`) are intentionally **not** provided:
+they reintroduced the escape and their callbacks would outlive the sandbox on the
+host event loop. node:vm is defense-in-depth, not a hard isolate — treat the
+ability to edit a workflow as privileged.

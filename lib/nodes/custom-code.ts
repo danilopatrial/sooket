@@ -32,34 +32,47 @@ class CustomCodeNode implements INodeExecutor {
     const { code = "" } = (node.data as unknown) as import("@/lib/node-types").CustomCodeNodeData;
     if (!code.trim()) throw new Error("Custom Code node: no code provided");
 
-    const sandbox: Record<string, unknown> = {
-      input:      inputResult.value,
-      JSON,
-      Math,
-      Number,
-      String,
-      Boolean,
-      Array,
-      Object,
-      Date,
-      parseInt,
-      parseFloat,
-      isNaN,
-      isFinite,
-      Infinity,
-      NaN,
-      // Timers so user code can perform async delays (retry loops, polling).
-      // Without setTimeout the async timeout guard below could never be reached.
-      setTimeout,
-      clearTimeout,
-      // Silenced console so users can log without side-effects leaking
-      console: { log: () => {}, warn: () => {}, error: () => {}, info: () => {} },
-    };
-
+    // Hardened sandbox. node:vm is NOT a guaranteed security boundary, but the
+    // trivial one-liner escape — `input.constructor.constructor("return process")()`
+    // — works only when a *host-realm* object (a primordial like Object, or a host
+    // function like setTimeout) is reachable from sandboxed code, because its
+    // constructor chain leads back to the host `Function`. We close that vector by:
+    //   1. Using a null-prototype context with NO host primordials injected. The vm
+    //      context already has its own context-local intrinsics (Object, Array,
+    //      JSON, Math, Number, Date, Promise, Map, Set, RegExp, parseInt, …), so user
+    //      code keeps them — but their constructor chain stays inside the context.
+    //   2. NOT exposing any host functions (no host setTimeout/clearTimeout/console).
+    //      Timer callbacks would also outlive the sandbox and run uncaught on the
+    //      host event loop, so dropping them removes a stability hazard too. Async
+    //      still works via the context's own Promise intrinsic.
+    //   3. Deep-cloning `input` into the context with JSON.parse, so even `input`
+    //      carries context-local prototypes rather than a live host-object handle.
+    // This is defense-in-depth hardening, not a hard isolate — treat workflow-edit
+    // access as privileged regardless.
+    const sandbox: Record<string, unknown> = Object.create(null);
     vm.createContext(sandbox);
 
-    // Wrap in async IIFE so users can write `return x` at top level and use await
-    const wrapped = `(async function(input) {\n${code}\n})(input)`;
+    // Serialise input to a JSON literal embedded in the script; the context rebuilds
+    // it with its own JSON.parse. A non-serializable input (BigInt, circular) is a
+    // caller error, surfaced before the script runs.
+    let inputJsonLiteral: string;
+    try {
+      const serialized = JSON.stringify(inputResult.value === undefined ? null : inputResult.value);
+      // top-level functions/symbols stringify to `undefined` → treat as null
+      inputJsonLiteral = JSON.stringify(serialized ?? "null");
+    } catch {
+      throw new Error("Custom Code error: input value is not JSON-serializable");
+    }
+
+    // Wrap in async IIFE so users can write `return x` at top level and use await.
+    // The prelude installs a silenced, context-local console as a global property
+    // (not a lexical const) so user code may still shadow `console` without a
+    // redeclaration error.
+    const wrapped =
+`(async function(input) {
+(function(){ const c = { log(){}, warn(){}, error(){}, info(){} }; globalThis.console = c; })();
+${code}
+})(JSON.parse(${inputJsonLiteral}))`;
 
     let promise: Promise<unknown>;
     try {

@@ -57,7 +57,19 @@ a hash, look up by hash, show the raw key exactly once at creation. (The repo's
 own memory notes a prior secret-leak incident — this is the same class of risk
 sitting in the data model.)
 
-### 1.3 Custom Code node is not a real sandbox
+### 1.3 Custom Code node is not a real sandbox — ✅ DONE (2026-06-11, hardened; not a hard isolate)
+Implemented defense-in-depth: the `node:vm` context is now null-prototype with
+**no host primordials/functions injected**, `input` is JSON-cloned into the
+context, `console` is a context-local no-op, and host `setTimeout`/`clearTimeout`
+are removed. This closes the trivial one-liner escape
+(`input.constructor.constructor("return process")()` — verified to return the
+host `process` before, blocked after) and the deferred-timer-callback hazard.
+Async still works via the `Promise` intrinsic. **Not** a guaranteed boundary (a
+V8 bug could still escape), so the canvas keeps the "full server access" warning
+and workflow-edit stays privileged. A real isolate (`isolated-vm`/subprocess) was
+deliberately NOT added — native deps are fragile in this npm-distributed package
+(see the sharp/libvips npx issue). Covered by unit tests + QA specs SEC-05/SEC-12.
+
 `lib/nodes/custom-code.ts` runs user code in `node:vm`. Node's own docs are
 explicit that `vm` is **not** a security boundary — escaping to the host is a
 one-liner via `this.constructor.constructor("return process")()` reachable

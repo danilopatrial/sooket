@@ -315,6 +315,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [SEC-09] No encryption secrets or provider keys present in client-side JS bundles — [spec](specs/SEC-09.md)
 - [x] [SEC-10] Expired API keys are rejected at `/api/v1/chat` — [spec](specs/SEC-10.md)
 - [x] [SEC-11] Workflow API keys are stored hashed (SHA-256), looked up by hash, and unrecoverable after creation — [spec](specs/SEC-11.md)
+- [x] [SEC-12] Custom Code node resists the constructor-chain sandbox escape (no host realm reachable) — [spec](specs/SEC-12.md)
 
 ---
 
