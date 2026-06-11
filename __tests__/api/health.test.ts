@@ -12,6 +12,7 @@ vi.mock("next/server", () => ({
 }));
 
 import { GET } from "@/app/api/health/route";
+import { version as pkgVersion } from "@/package.json";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -48,10 +49,16 @@ describe("GET /api/health", () => {
     expect(parsed).toBeLessThanOrEqual(after);
   });
 
+  it("returns the package version", async () => {
+    const res = await GET();
+    const body = await res.json();
+    expect(body.version).toBe(pkgVersion);
+  });
+
   it("response body has exactly the expected fields", async () => {
     const res = await GET();
     const body = await res.json();
-    expect(Object.keys(body).sort()).toEqual(["status", "timestamp", "uptime"]);
+    expect(Object.keys(body).sort()).toEqual(["status", "timestamp", "uptime", "version"]);
   });
 
   it("uptime is non-decreasing between consecutive calls", async () => {
