@@ -7,7 +7,7 @@ source_files:
 ---
 
 ## What this tests
-Verifies that `POST /api/v1/chat` returns 429 when a per-key rate limit override is configured and exceeded within a fixed 1-minute window (`Math.floor(Date.now() / 60_000)` — a tumbling bucket that resets at each minute boundary, not a sliding window).
+Verifies that `POST /api/v1/chat` returns 429 when a per-key rate limit override is configured and exceeded within a **sliding** 1-minute window. The per-key limiter shares `consumeSlidingWindow` (`lib/rate-limit.ts`) with the Rate Limiter node, so a burst straddling a minute boundary does not pass ~2× the limit.
 
 ## Steps — configure a rate limit override
 
@@ -42,11 +42,11 @@ Verifies that `POST /api/v1/chat` returns 429 when a per-key rate limit override
 11. Verify the 429 response includes all three CORS headers
 
 ## Expected result
-- Key with `rate_limit_override = N`: returns 429 after N requests in the same 1-minute window
+- Key with `rate_limit_override = N`: returns 429 once the sliding-window estimate reaches N within ~1 minute
 - 429 body: `{ "error": "Rate limit exceeded for this API key" }`
 - Key without `rate_limit_override` (null): no per-key rate limiting
-- Window is 1 calendar minute (floor of `Date.now() / 60_000`), not a rolling 60-second window
-- Rate counter incremented with `ON CONFLICT DO UPDATE SET count = count + 1` (atomic upsert)
+- Window is a sliding 1-minute window: the previous minute's count is weighted by its remaining overlap, so the boundary is smoothed (no 2× burst)
+- Rate counter incremented with `ON CONFLICT DO UPDATE SET count = count + 1` (atomic upsert); blocked requests do not increment
 - CORS headers present on 429
 
 ## Failure indicators
@@ -59,7 +59,7 @@ Verifies that `POST /api/v1/chat` returns 429 when a per-key rate limit override
 Per-key rate limiting is a billing and abuse-prevention mechanism; a broken limit allows unlimited traffic against expensive downstream APIs.
 
 ## Source reference
-`app/api/v1/chat/route.ts` lines 73-87 (rate limit check: `if (keyRow.rate_limit_override != null)`, 1-minute window via `Math.floor(Date.now() / 60_000)`, `if (current >= keyRow.rate_limit_override) return corsJson({ error: "Rate limit exceeded for this API key" }, 429)`).
+`lib/execution-handler.ts` — `if (keyRow.rate_limit_override != null)` builds a `RateLimitStore` over `rate_limit_counters` and calls `consumeSlidingWindow(store, "apik:" + key_id, Date.now(), 60_000, rate_limit_override)`; a `!decision.allowed` result returns `{ error: "Rate limit exceeded for this API key" }` with status 429. `lib/rate-limit.ts` holds the shared algorithm.
 
 ## Notes
-The window key is `apik:{key_id}` + `window_start` (floor minute). This is a tumbling 1-minute window — it resets at the start of each calendar minute, not 60 seconds after the first request. The counter is persisted in the `rate_limit_counters` SQLite table.
+The window key is `apik:{key_id}`; counts are stored per ms-aligned sub-window (`floor(now/60000)*60000`) in the `rate_limit_counters` SQLite table, and the decision weights the previous sub-window. The same `consumeSlidingWindow` backs the Rate Limiter node (NODE-LOGIC-10), so both enforcement points share semantics. The read-decide-increment runs as synchronous SQLite calls, so it is atomic for this single-threaded process.

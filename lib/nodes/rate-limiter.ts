@@ -2,6 +2,7 @@ import type { INodeExecutor, NodeContext } from "./types";
 import type { WorkflowNode, EvalResult } from "@/lib/workflow-types";
 import type { RateLimiterNodeData } from "@/lib/node-types";
 import { toText } from "./utils";
+import { consumeSlidingWindow } from "@/lib/rate-limit";
 
 class RateLimiterNode implements INodeExecutor {
   async execute(node: WorkflowNode, sourceHandle: string | null | undefined, ctx: NodeContext) {
@@ -40,17 +41,23 @@ class RateLimiterNode implements INodeExecutor {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
 
-    const now         = Math.floor(Date.now() / 1000);
-    // Fixed-window (tumbling) bucket: the counter resets at each window boundary.
-    // This is NOT a sliding window — a burst straddling a boundary can pass twice
-    // the limit across the two adjacent buckets.
-    const windowStart = Math.floor(now / safeWindow) * safeWindow;
+    // Sliding-window counter (shared with the per-API-key limiter): smooths the
+    // fixed-window boundary so a burst straddling two windows can't pass ~2× the
+    // limit. The read+increment below run synchronously, so the check is atomic.
+    const decision = consumeSlidingWindow(
+      { getRateLimitCount: ctx.getRateLimitCount, incrementRateLimitCounter: ctx.incrementRateLimitCounter },
+      counterKey,
+      Date.now(),
+      safeWindow * 1000,
+      safeLimit,
+    );
+    const count = decision.count;
 
-    setImmediate(() => ctx.evictExpiredRateLimitCounters(windowStart));
+    // Evict windows older than the previous one; the previous window must be
+    // retained because the sliding estimate still weights it.
+    setImmediate(() => ctx.evictExpiredRateLimitCounters(decision.previousWindowStart));
 
-    const count = ctx.incrementRateLimitCounter(counterKey, windowStart);
-
-    if (count > safeLimit) {
+    if (!decision.allowed) {
       if (action === "delay") {
         await new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, delayMs)));
         const outputResult:  EvalResult = { value: inputResult.value, inputTokens: 0, outputTokens: 0 };

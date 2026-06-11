@@ -107,6 +107,7 @@ export interface WorkflowDbAdapter {
   evictExpiredCacheEntries(now: number): void;
 
   // Rate-limit counters
+  getRateLimitCount(key: string, windowStart: number): number;
   incrementRateLimitCounter(key: string, windowStart: number): number;
   evictExpiredRateLimitCounters(windowStart: number): void;
 

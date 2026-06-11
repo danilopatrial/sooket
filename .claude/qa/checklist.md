@@ -231,6 +231,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [NODE-LOGIC-08] Cache node — TTL-based cache hit/miss, formatted TTL display — [spec](specs/NODE-LOGIC-08.md)
 - [x] [NODE-LOGIC-09] Semantic Cache node — embedding deduplication, similarity threshold slider — [spec](specs/NODE-LOGIC-09.md)
 - [x] [NODE-LOGIC-10] Rate Limiter node — block/delay on quota exceeded, key source (IP/global/custom) — [spec](specs/NODE-LOGIC-10.md)
+- [x] [NODE-LOGIC-10b] Rate Limiter uses a sliding window — boundary burst does not pass ~2× the limit — [spec](specs/NODE-LOGIC-10b.md)
 - [x] [NODE-LOGIC-11] Content Guardrail node — pattern list and optional LLM check, block/flag-and-pass modes — [spec](specs/NODE-LOGIC-11.md)
 - [x] [NODE-LOGIC-11b] Content Guardrail node — LLM mode fails open (allows content) if Anthropic API call fails — [spec](specs/NODE-LOGIC-11b.md)
 - [x] [NODE-LOGIC-12] Custom Code node — 5-second VM timeout; sandbox exposes only: input, JSON, Math, Number, String, Boolean, Array, Object, Date, parseInt, parseFloat — [spec](specs/NODE-LOGIC-12.md)

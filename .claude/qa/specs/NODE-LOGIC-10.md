@@ -61,10 +61,11 @@ Verifies that the Rate Limiter node enforces per-window request quotas using the
 - Within limit: `output` = input value; `blocked` = `active: false`
 - On breach, block: `output` = `active: false`; `blocked` = string with count/limit/window info
 - On breach, delay: waits `delayMs` ms then passes; `output` = input value; `blocked` = `active: false`
-- Counter uses a fixed-window (tumbling) bucket: resets at the start of each window period. This is **not** a sliding window — a burst straddling a window boundary can pass up to twice the limit across the two adjacent buckets
+- Counter uses a **sliding-window counter** (shared `consumeSlidingWindow` in `lib/rate-limit.ts`): the previous window's count is weighted by the fraction of it still overlapping the current window, so a burst straddling a boundary is **not** allowed to pass ~2× the limit. See NODE-LOGIC-10b for the boundary behavior.
 
 ## Failure indicators
 - Requests above the limit still pass on `output` in block mode
+- A burst straddling a window boundary passes ~2× the limit (boundary not smoothed — regressed to a fixed/tumbling window)
 - `blocked` string is empty or undefined on breach
 - Delay field visible when action is "Block"
 - Key source switch doesn't change which counter is incremented (all requests share one counter regardless of IP)
@@ -74,7 +75,7 @@ Verifies that the Rate Limiter node enforces per-window request quotas using the
 A broken rate limiter allows unlimited traffic through, enabling DoS conditions on downstream services (LLM APIs, databases).
 
 ## Source reference
-`components/canvas/nodes/RateLimiterNode.tsx` lines 58-62 (`formatWindow`), line 86 (subtitle format), lines 191-211 (conditional Delay field); `lib/nodes/rate-limiter.ts` lines 33-40 (key derivation per source), lines 49-51 (tumbling window + async eviction), lines 55-72 (breach handling: block = inactive output, delay = wait then pass), lines 66 (blocked message format).
+`components/canvas/nodes/RateLimiterNode.tsx` (`formatWindow`, subtitle format, conditional Delay field); `lib/nodes/rate-limiter.ts` — key derivation per source, then `consumeSlidingWindow(...)` from `lib/rate-limit.ts` for the decision, async eviction of windows older than the previous one (the previous window is retained because the sliding estimate weights it), and breach handling (block = inactive output, delay = wait then pass, blocked message format).
 
 ## Notes
-The counter window is a fixed-window (tumbling) window, **not a sliding window**: `Math.floor(now / window) * window`. Requests at the boundary of a new window start a fresh counter, so a burst straddling a boundary can pass up to twice the limit across the two adjacent buckets — a true sliding window would block that second burst. Counter eviction is asynchronous (`setImmediate`) so stale counters from prior windows don't block request processing.
+The counter is a **sliding-window counter**, not a tumbling window. `lib/rate-limit.ts` computes `weighted = currentCount + previousCount * ((windowMs - elapsed) / windowMs)` and blocks when `weighted >= limit`. The previous window's influence decays from full (at the boundary) to zero (at window end), so a burst that would have passed ~2× the limit across a boundary under a tumbling window is now blocked. The same `consumeSlidingWindow` algorithm backs the per-API-key limiter (see API-08), so the two enforcement points share semantics. Eviction is asynchronous (`setImmediate`) and retains the previous window.

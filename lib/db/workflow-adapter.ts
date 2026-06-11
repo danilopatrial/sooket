@@ -58,6 +58,13 @@ export function createSqliteAdapter(db?: DatabaseSync): WorkflowDbAdapter {
       resolvedDb.prepare(`DELETE FROM node_cache WHERE expires_at <= ?`).run(now);
     },
 
+    getRateLimitCount(key, windowStart) {
+      const row = resolvedDb.prepare(
+        `SELECT count FROM rate_limit_counters WHERE key = ? AND window_start = ?`
+      ).get(key, windowStart) as { count: number } | undefined;
+      return row?.count ?? 0;
+    },
+
     incrementRateLimitCounter(key, windowStart) {
       const row = resolvedDb.prepare(
         `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?, ?, 1)

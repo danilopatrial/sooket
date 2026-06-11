@@ -202,11 +202,19 @@ describe("rate-limiter executor", () => {
     await expect(rateLimiterExec.execute(makeNode("rate-limiter", {}), "output", makeCtx())).rejects.toThrow("no input connected");
   });
 
+  // The sliding-window decision reads getRateLimitCount twice per request: the
+  // current window first, then the previous. This helper returns `current` for
+  // the first read and 0 for the previous, so a test can set the effective count.
+  const seqCount = (current: number) => {
+    let call = 0;
+    return () => (call++ === 0 ? current : 0);
+  };
+
   it("passes through when under the limit", async () => {
-    // count = 1, limit = 100 → under limit
+    // current window count = 1, limit = 100 → weighted ≈ 1 < 100 → under limit
     const ctx = makeCtx({
       ...wireInput("input", "data"),
-      incrementRateLimitCounter: () => 1,
+      getRateLimitCount: seqCount(1),
     });
     const r = await rateLimiterExec.execute(makeNode("rate-limiter", {
       keySource: "ip", windowSeconds: 60, limit: 100, action: "block",
@@ -218,7 +226,7 @@ describe("rate-limiter executor", () => {
   it("returns inactive on 'output' when over limit with action=block", async () => {
     const ctx = makeCtx({
       ...wireInput("input", "data"),
-      incrementRateLimitCounter: () => 101,
+      getRateLimitCount: seqCount(150), // ≥ 100 → blocked
     });
     const r = await rateLimiterExec.execute(makeNode("rate-limiter", {
       keySource: "ip", windowSeconds: 60, limit: 100, action: "block",
@@ -229,7 +237,7 @@ describe("rate-limiter executor", () => {
   it("returns rate-limit message on 'blocked' handle when over limit", async () => {
     const ctx = makeCtx({
       ...wireInput("input", "data"),
-      incrementRateLimitCounter: () => 101,
+      getRateLimitCount: seqCount(150),
     });
     const r = await rateLimiterExec.execute(makeNode("rate-limiter", {
       keySource: "ip", windowSeconds: 60, limit: 100, action: "block",
@@ -241,7 +249,7 @@ describe("rate-limiter executor", () => {
   it("returns inactive on 'blocked' handle when under limit", async () => {
     const ctx = makeCtx({
       ...wireInput("input", "data"),
-      incrementRateLimitCounter: () => 5,
+      getRateLimitCount: seqCount(5),
     });
     const r = await rateLimiterExec.execute(makeNode("rate-limiter", {
       keySource: "ip", windowSeconds: 60, limit: 100, action: "block",

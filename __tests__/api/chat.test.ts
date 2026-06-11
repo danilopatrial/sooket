@@ -125,7 +125,7 @@ describe("handleExecutionRequest — auth flow", () => {
     const keyRow = db.prepare(
       `SELECT id FROM workflow_api_keys WHERE key_hash = ?`
     ).get(hashApiKey("sk-wf-valid")) as { id: number };
-    const windowStart = Math.floor(Date.now() / 60_000);
+    const windowStart = Math.floor(Date.now() / 60_000) * 60_000; // ms-aligned sliding window start
     db.prepare(
       `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?,?,5)`
     ).run(`apik:${keyRow.id}`, windowStart);
@@ -138,7 +138,7 @@ describe("handleExecutionRequest — auth flow", () => {
     const keyRow = db.prepare(
       `SELECT id FROM workflow_api_keys WHERE key_hash = ?`
     ).get(hashApiKey("sk-wf-valid")) as { id: number };
-    const windowStart = Math.floor(Date.now() / 60_000);
+    const windowStart = Math.floor(Date.now() / 60_000) * 60_000; // ms-aligned sliding window start
     db.prepare(
       `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?,?,2)`
     ).run(`apik:${keyRow.id}`, windowStart);

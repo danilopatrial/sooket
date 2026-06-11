@@ -25,6 +25,7 @@ const adapter: WorkflowDbAdapter = {
   getCacheEntry:                 ()    => null,
   setCacheEntry:                 ()    => {},
   evictExpiredCacheEntries:      ()    => {},
+  getRateLimitCount: () => 0,
   incrementRateLimitCounter:     ()    => 1,
   evictExpiredRateLimitCounters: ()    => {},
   getSemanticCacheEntries:       ()    => [],

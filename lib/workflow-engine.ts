@@ -208,6 +208,9 @@ async function runNode(
       evictExpiredCacheEntries: (now: number) =>
         adapter.evictExpiredCacheEntries(now),
 
+      getRateLimitCount: (key: string, windowStart: number) =>
+        adapter.getRateLimitCount(key, windowStart),
+
       incrementRateLimitCounter: (key: string, windowStart: number) =>
         adapter.incrementRateLimitCounter(key, windowStart),
 

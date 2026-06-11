@@ -13,6 +13,7 @@ import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
 import { hashApiKey } from "@/lib/security/api-keys";
+import { consumeSlidingWindow } from "@/lib/rate-limit";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -104,20 +105,32 @@ export async function handleExecutionRequest(
   // ── 5. Workflow must be active ─────────────────────────────────────────────
   if (!keyRow.is_active) return fail({ error: "This workflow is not active" }, 403);
 
-  // ── 6. Per-key rate limiting (fixed 1-minute window) ──────────────────────
+  // ── 6. Per-key rate limiting (sliding 1-minute window) ────────────────────
+  // Shares consumeSlidingWindow with the Rate Limiter node so both enforce the
+  // same boundary-safe semantics. The store's three calls are synchronous, so
+  // the read-decide-increment is atomic for this single-threaded process.
   if (keyRow.rate_limit_override != null) {
-    const windowKey = `apik:${keyRow.key_id}`;
-    const windowStart = Math.floor(Date.now() / 60_000);
-    const limitRow = db.prepare(
-      `SELECT count FROM rate_limit_counters WHERE key = ? AND window_start = ?`
-    ).get(windowKey, windowStart) as { count: number } | undefined;
-    if ((limitRow?.count ?? 0) >= keyRow.rate_limit_override) {
+    const store = {
+      getRateLimitCount: (key: string, windowStart: number): number => {
+        const row = db.prepare(
+          `SELECT count FROM rate_limit_counters WHERE key = ? AND window_start = ?`
+        ).get(key, windowStart) as { count: number } | undefined;
+        return row?.count ?? 0;
+      },
+      incrementRateLimitCounter: (key: string, windowStart: number): number => {
+        db.prepare(
+          `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?, ?, 1)
+           ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1`
+        ).run(key, windowStart);
+        return 0;
+      },
+    };
+    const decision = consumeSlidingWindow(
+      store, `apik:${keyRow.key_id}`, Date.now(), 60_000, keyRow.rate_limit_override,
+    );
+    if (!decision.allowed) {
       return fail({ error: "Rate limit exceeded for this API key" }, 429);
     }
-    db.prepare(
-      `INSERT INTO rate_limit_counters (key, window_start, count) VALUES (?, ?, 1)
-       ON CONFLICT(key, window_start) DO UPDATE SET count = count + 1`
-    ).run(windowKey, windowStart);
   }
 
   // ── 7. Update last_used_at (fire-and-forget, non-critical) ─────────────────

@@ -131,7 +131,17 @@ on *every request*, each one re-deriving the key. So per request you pay
 tax on the hot path and a CPU-DoS amplifier. Derive once and cache the
 `CryptoKey` per secret; bump iterations.
 
-### 1.7 Rate limiting is fixed-window (documented burst hole) and split-brained
+### 1.7 Rate limiting is fixed-window (documented burst hole) and split-brained — ✅ DONE (2026-06-11)
+Implemented a shared sliding-window-counter helper (`lib/rate-limit.ts`,
+`consumeSlidingWindow`) that weights the previous window by its remaining
+overlap, closing the ~2× boundary burst. Both the Rate Limiter node and the
+per-API-key limiter now use it (split-brain unified). Added a `getRateLimitCount`
+read primitive to the adapter/NodeContext; eviction retains the previous window;
+blocked requests don't increment. Covered by a pure-helper unit suite (boundary
+closure, recovery, key isolation) + node + handler tests; QA specs NODE-LOGIC-10
+(updated), API-08 (updated), NODE-LOGIC-10b (new). Note: sliding-window *counter*
+(approximation), not a per-request log — the standard production trade-off.
+
 Both the per-key limiter (`lib/execution-handler.ts`, 1-minute fixed window) and
 the Rate Limiter node (`lib/nodes/rate-limiter.ts`) use tumbling fixed windows.
 The node's own comment admits a burst straddling a boundary passes ~2× the limit.

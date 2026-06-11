@@ -34,6 +34,7 @@ export function makeCtx(overrides: Partial<NodeContext> = {}): NodeContext {
     getCacheEntry: () => null,
     setCacheEntry: () => {},
     evictExpiredCacheEntries: () => {},
+    getRateLimitCount: () => 0,
     incrementRateLimitCounter: () => 1,
     evictExpiredRateLimitCounters: () => {},
     getSemanticCacheEntries: () => [],
