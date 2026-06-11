@@ -14,6 +14,18 @@ import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
 import { hashApiKey } from "@/lib/security/api-keys";
 import { consumeSlidingWindow } from "@/lib/rate-limit";
+import {
+  extractIdempotencyKey,
+  requestFingerprint,
+  findIdempotencyRecord,
+  reserveIdempotency,
+  completeIdempotency,
+  releaseIdempotency,
+  evictExpiredIdempotency,
+  idempotencyTtlMs,
+  MAX_IDEMPOTENCY_KEY_LENGTH,
+  type IdempotencyRecord,
+} from "@/lib/idempotency";
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -61,6 +73,18 @@ export async function handleExecutionRequest(
     return { status, body, corsHeaders: CORS_HEADERS };
   }
 
+  /** Rebuild a stored response for an idempotent replay, flagged for the caller. */
+  function replayResponse(rec: IdempotencyRecord): ExecutionResponse {
+    const body = rec.response_body !== null ? JSON.parse(rec.response_body) : null;
+    const storedHeaders: Record<string, string> =
+      rec.response_headers !== null ? JSON.parse(rec.response_headers) : {};
+    return {
+      status: rec.response_status ?? 200,
+      body,
+      corsHeaders: { ...storedHeaders, "Idempotency-Replayed": "true" },
+    };
+  }
+
   const { apiKey, rawBody, headers, ip } = req;
   const db = req.db ?? getDb();
 
@@ -104,6 +128,24 @@ export async function handleExecutionRequest(
 
   // ── 5. Workflow must be active ─────────────────────────────────────────────
   if (!keyRow.is_active) return fail({ error: "This workflow is not active" }, 403);
+
+  // ── 5b. Idempotency replay check (opt-in via Idempotency-Key) ──────────────
+  // Done before rate limiting / semaphore so a retry returns the cached result
+  // without consuming a slot or quota. Scoped to this API key.
+  const idemKey = extractIdempotencyKey(headers);
+  if (idemKey !== null) {
+    if (idemKey.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+      return fail({ error: `Idempotency-Key must be at most ${MAX_IDEMPOTENCY_KEY_LENGTH} characters` }, 400);
+    }
+    const existing = findIdempotencyRecord(db, keyRow.key_id, idemKey, Date.now());
+    if (existing) {
+      if (existing.request_fingerprint !== requestFingerprint(rawBody)) {
+        return fail({ error: "Idempotency-Key was already used with a different request body" }, 422);
+      }
+      if (existing.status === "completed") return replayResponse(existing);
+      return fail({ error: "A request with this Idempotency-Key is already in progress" }, 409);
+    }
+  }
 
   // ── 6. Per-key rate limiting (sliding 1-minute window) ────────────────────
   // Shares consumeSlidingWindow with the Rate Limiter node so both enforce the
@@ -173,6 +215,42 @@ export async function handleExecutionRequest(
     );
   }
 
+  // ── 10b. Reserve the idempotency record now that we hold a slot ────────────
+  // The UNIQUE(api_key_id, key) insert is the concurrency guard: if another
+  // request reserved it between the replay check and here, the insert fails and
+  // we 409 (or replay if it already completed). Release the slot on that path.
+  let idemRecordId: number | null = null;
+  if (idemKey !== null) {
+    idemRecordId = reserveIdempotency(db, capturedKeyId, idemKey, requestFingerprint(rawBody), Date.now(), idempotencyTtlMs());
+    if (idemRecordId === null) {
+      executionSemaphore.release();
+      const existing = findIdempotencyRecord(db, capturedKeyId, idemKey, Date.now());
+      if (existing && existing.status === "completed" && existing.request_fingerprint === requestFingerprint(rawBody)) {
+        return replayResponse(existing);
+      }
+      return fail({ error: "A request with this Idempotency-Key is already in progress" }, 409);
+    }
+    setImmediate(() => { try { evictExpiredIdempotency(db, Date.now()); } catch { /* non-critical */ } });
+  }
+
+  // Persist (or, on a 5xx, release) the reserved record, then return the response.
+  // A server error is treated as transient — the record is dropped so a retry can
+  // re-execute rather than replaying the failure forever.
+  const finalize = (response: ExecutionResponse): ExecutionResponse => {
+    if (idemRecordId !== null) {
+      if (response.status >= 500) {
+        releaseIdempotency(db, idemRecordId);
+      } else {
+        completeIdempotency(
+          db, idemRecordId, response.status,
+          JSON.stringify(response.body ?? null),
+          JSON.stringify(response.corsHeaders),
+        );
+      }
+    }
+    return response;
+  };
+
   // ── 11. Execute ───────────────────────────────────────────────────────────
   const adapter = createSqliteAdapter(db);
   const hooks = createSqliteHooks(db, workflow.id, capturedKeyId, adapter);
@@ -194,16 +272,19 @@ export async function handleExecutionRequest(
   }
 
   // ── 12. Format result ─────────────────────────────────────────────────────
+  // Every execution-outcome return is routed through finalize() so the
+  // idempotency record (if any) is persisted or released exactly once.
+  //
   // A disconnected output is a workflow misconfiguration (client error), not a
   // runtime failure — surface it as 400, like the no-active-path case below. A
   // blown execution deadline maps to 504 (Gateway Timeout) so callers can tell
   // "the pipeline took too long" apart from a genuine 500.
   if (error) {
-    if (error === NO_OUTPUT_CONNECTED_ERROR) return fail({ error }, 400);
-    if (error.includes(WORKFLOW_TIMEOUT_ERROR)) return fail({ error }, 504);
-    return fail({ error }, 500);
+    if (error === NO_OUTPUT_CONNECTED_ERROR) return finalize(fail({ error }, 400));
+    if (error.includes(WORKFLOW_TIMEOUT_ERROR)) return finalize(fail({ error }, 504));
+    return finalize(fail({ error }, 500));
   }
-  if (!result) return fail({ error: "No active path reached any output node" }, 400);
+  if (!result) return finalize(fail({ error: "No active path reached any output node" }, 400));
 
   const rv = result.value;
 
@@ -225,7 +306,7 @@ export async function handleExecutionRequest(
       catch { autoContentType = "text/plain; charset=utf-8"; }
     }
 
-    return {
+    return finalize({
       status: rb.status,
       body: bodyStr,
       corsHeaders: {
@@ -233,12 +314,12 @@ export async function handleExecutionRequest(
         ...(autoContentType ? { "Content-Type": autoContentType } : {}),
         ...userHeaders,
       },
-    };
+    });
   }
 
   const reply =
     rv === undefined || rv === null ? "" :
     typeof rv === "object" ? rv :
     String(rv);
-  return { status: 200, body: { reply }, corsHeaders: CORS_HEADERS };
+  return finalize({ status: 200, body: { reply }, corsHeaders: CORS_HEADERS });
 }

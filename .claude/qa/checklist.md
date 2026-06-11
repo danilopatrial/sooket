@@ -301,6 +301,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [API-11] GET /api/v1/chat returns `{ok: true, local: true}` health check — [spec](specs/API-11.md)
 - [x] [API-12] Binary response served via `/api/binary/[id]` with correct MIME type and Content-Length — [spec](specs/API-12.md)
 - [x] [API-13] Response Builder node result: custom status code and headers reflected in HTTP response — [spec](specs/API-13.md)
+- [x] [API-14] Idempotency-Key replays the first response on retry (409 in-progress, 422 reuse-mismatch, 5xx not cached) — [spec](specs/API-14.md)
 
 ---
 

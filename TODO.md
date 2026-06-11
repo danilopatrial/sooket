@@ -182,7 +182,17 @@ feature — every consumer wants token streaming, and right now a long completio
 means the client sits on an open connection with zero bytes until it's done
 (holding a semaphore slot the whole time — see 1.1).
 
-### 2.2 Idempotency keys
+### 2.2 Idempotency keys — ✅ DONE (2026-06-11)
+Implemented opt-in `Idempotency-Key` support on `POST /api/v1/chat`: the first
+request's response is stored and replayed (`Idempotency-Replayed: true`) for any
+retry with the same key, scoped per API key. Reuse with a different body → 422,
+in-progress duplicate → 409 (UNIQUE-insert concurrency guard), key > 255 chars →
+400; 5xx outcomes are not cached (retry re-executes); records expire after a TTL
+(`SOOKET_IDEMPOTENCY_TTL_MS`, default 24h). New `idempotency_keys` table
+(migration 015), helper `lib/idempotency.ts`, wired into the shared execution
+handler so the chat route + execution server both get it. Covered by unit tests
+(store primitives) + handler integration tests; QA spec API-14; docs in AGENTS.md.
+
 No `Idempotency-Key` support on `POST /api/v1/chat`. Any serious API platform
 needs safe retries for non-idempotent pipelines (one that charges a card, sends
 an email, writes to a downstream system). Today a client retry = duplicate
@@ -338,3 +348,37 @@ distinction to know when to route traffic vs. restart/alert.
 - [ ] Document in `.env.example` / docs alongside the existing health note
 
 Liveness behavior (`GET /api/health` with no flag) stays exactly as-is.
+
+## 7. Docker image fails to build on current main — onnxruntime needs glibc, base image is musl
+
+Found 2026-06-11 building `docker build -t sooket:local .` from a fresh clone
+of `main` (`c3ce179`, tag `v0.1.2`), while wiring up the hosted control plane
+(sooket.cloud). `npm run build` dies inside the image during Next's
+"Collecting page data" phase:
+
+```
+Error: Failed to load external module @huggingface/transformers-…:
+Error loading shared library ld-linux-x86-64.so.2: No such file or directory
+(needed by /app/node_modules/onnxruntime-node/.../libonnxruntime.so.1)
+Error: Failed to collect page data for /api/complexity
+```
+
+Cause: `lib/complexity/embedder.ts` imports `@huggingface/transformers` at
+module top level, so collecting page data for `app/api/complexity/route.ts`
+loads `onnxruntime-node`. Its prebuilt `libonnxruntime.so.1` is glibc-only;
+the Dockerfile's `node:22-alpine` base is musl, so the glibc loader
+(`ld-linux-x86-64.so.2`) doesn't exist. **This blocks any Docker deployment of
+current main, including every sooket.cloud tenant image.**
+
+- [ ] Dockerfile: move all stages off musl, e.g. `FROM node:22-slim` —
+      onnxruntime-node ships glibc binaries only. (Alpine + `gcompat` also
+      works on paper but is flaky with onnxruntime; not recommended.)
+      Mind the runner stage: Debian uses `groupadd`/`useradd`, not
+      `addgroup`/`adduser` with those flags.
+- [ ] `lib/complexity/embedder.ts`: import `@huggingface/transformers` lazily
+      inside the function (`await import(...)`) so `next build` never loads
+      the native runtime just to collect page data. This alone unblocks the
+      *build*; the complexity endpoint still needs glibc at runtime, so the
+      base-image fix matters regardless.
+- [ ] CI: add a `docker build .` job so an unbuildable image can't land on
+      `main` again.

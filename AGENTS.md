@@ -142,7 +142,7 @@ on the user's own machine or server.
 
 | Route | Methods | Purpose |
 |---|---|---|
-| `/api/v1/chat` | POST, OPTIONS | Workflow execution (live API, CORS enabled); GET returns `{ ok, local }` health probe |
+| `/api/v1/chat` | POST, OPTIONS | Workflow execution (live API, CORS enabled); GET returns `{ ok, local }` health probe. Optional `Idempotency-Key` header makes retries safe — the first response is stored and replayed (`Idempotency-Replayed: true`) per API key; reuse with a different body → 422, in-progress duplicate → 409 |
 | `/api/webhooks/[slug]` | POST, GET, PUT, PATCH, OPTIONS | Webhook execution endpoint — token-gated, non-JSON bodies wrapped as `{ body }` |
 | `/api/workflows` | POST | Create workflow (returns `{ slug }`) |
 | `/api/workflows/[slug]` | PATCH, DELETE | Update name/nodes/edges/is_active; delete (active workflow cannot be deleted) |
@@ -199,7 +199,8 @@ new numbered migration file rather than editing earlier ones or running raw
 | `node_execution_logs` | Per-node input/output snapshots for the Logs tab |
 | `node_cache` | TTL-based key-value cache (Cache node) |
 | `semantic_cache` | Embedding vectors + values for the Semantic Cache node |
-| `rate_limit_counters` | Fixed-window (tumbling) counters for the Rate Limiter node |
+| `rate_limit_counters` | Sliding-window counter sub-buckets for the Rate Limiter node and per-key limiter (see `lib/rate-limit.ts`) |
+| `idempotency_keys` | Stored responses for `Idempotency-Key` replay, scoped per `api_key_id`, with `request_fingerprint` and `expires_at` (see `lib/idempotency.ts`) |
 | `workflow_access_lists` | Per-workflow allowlist/blocklist entries |
 | `workflow_test_presets` | Saved sandbox JSON payloads (also stores `headers` and `query` fields) |
 | `settings` | Instance-level key/value store (holds `api_key`) |
@@ -337,6 +338,10 @@ SOOKET_BUSY_TIMEOUT_MS       # Optional. SQLite busy_timeout in ms (default 5000
                              # instead of throwing SQLITE_BUSY immediately. Matters when
                              # the execution server shares the DB file with Next.js. 0
                              # disables waiting (fail fast). See lib/db/index.ts.
+SOOKET_IDEMPOTENCY_TTL_MS    # Optional. Retention for Idempotency-Key records on
+                             # /api/v1/chat (default 86400000 = 24h). After this, a key
+                             # can be reused and its stored response is evicted. See
+                             # lib/idempotency.ts.
 ```
 
 ## Authentication & exposure

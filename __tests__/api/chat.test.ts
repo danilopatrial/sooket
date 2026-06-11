@@ -3,6 +3,7 @@ import { DatabaseSync } from "node:sqlite";
 import { ALL_MIGRATIONS } from "@/lib/db/migrations";
 import { runMigrations } from "@/lib/db/run-migrations";
 import { hashApiKey, deriveKeyPrefix } from "@/lib/security/api-keys";
+import { requestFingerprint } from "@/lib/idempotency";
 
 // Prevent fire-and-forget DB writes from interfering between tests
 vi.stubGlobal("setImmediate", vi.fn());
@@ -253,5 +254,83 @@ describe("handleExecutionRequest — auth flow", () => {
     seedKey(db, { expiresAt: future });
     const { status } = await call("sk-wf-valid");
     expect(status).toBe(200);
+  });
+});
+
+describe("handleExecutionRequest — idempotency keys", () => {
+  // Reset call history (keeps the OK_RESULT implementation from the outer
+  // beforeEach) so per-test execution counts are meaningful.
+  beforeEach(() => { vi.mocked(executeWorkflow).mockClear(); });
+
+  function callIdem(rawBody: string, idemKey: string | null) {
+    const headers = new Headers();
+    if (idemKey !== null) headers.set("Idempotency-Key", idemKey);
+    return handleExecutionRequest({ apiKey: "sk-wf-valid", rawBody, headers, ip: "127.0.0.1", db });
+  }
+
+  it("replays the first response on a retry with the same key (no re-execution)", async () => {
+    seedKey(db);
+    const first = await callIdem('{"m":1}', "idem-1");
+    expect(first.status).toBe(200);
+    expect((first.body as Record<string, unknown>).reply).toBe("pong");
+    expect(vi.mocked(executeWorkflow)).toHaveBeenCalledTimes(1);
+
+    const second = await callIdem('{"m":1}', "idem-1");
+    expect(second.status).toBe(200);
+    expect((second.body as Record<string, unknown>).reply).toBe("pong");
+    // Workflow was NOT executed again — the stored response was replayed.
+    expect(vi.mocked(executeWorkflow)).toHaveBeenCalledTimes(1);
+    expect(second.corsHeaders["Idempotency-Replayed"]).toBe("true");
+  });
+
+  it("422 when the same key is reused with a different request body", async () => {
+    seedKey(db);
+    await callIdem('{"m":1}', "idem-2");
+    const reused = await callIdem('{"m":999}', "idem-2");
+    expect(reused.status).toBe(422);
+    expect((reused.body as Record<string, unknown>).error).toMatch(/different request body/);
+  });
+
+  it("409 when a request with the same key is still in progress", async () => {
+    seedKey(db);
+    const keyRow = db.prepare(
+      `SELECT id FROM workflow_api_keys WHERE key_hash = ?`
+    ).get(hashApiKey("sk-wf-valid")) as { id: number };
+    // Simulate an in-flight request: an in_progress record with the SAME body
+    // fingerprint already exists (so we hit the in-progress path, not the 422
+    // fingerprint-mismatch path).
+    db.prepare(
+      `INSERT INTO idempotency_keys (api_key_id, idempotency_key, request_fingerprint, status, expires_at)
+       VALUES (?, ?, ?, 'in_progress', ?)`
+    ).run(keyRow.id, "idem-3", requestFingerprint("{}"), Date.now() + 60_000);
+    const res = await callIdem("{}", "idem-3");
+    expect(res.status).toBe(409);
+  });
+
+  it("does NOT cache a 5xx outcome — a retry re-executes", async () => {
+    seedKey(db);
+    vi.mocked(executeWorkflow).mockResolvedValueOnce({ result: null, error: "boom", traces: [] });
+    const first = await callIdem("{}", "idem-4");
+    expect(first.status).toBe(500);
+
+    // Default mock returns OK again; the retry should re-run (record was released).
+    const second = await callIdem("{}", "idem-4");
+    expect(second.status).toBe(200);
+    expect(vi.mocked(executeWorkflow)).toHaveBeenCalledTimes(2);
+  });
+
+  it("400 when the Idempotency-Key exceeds 255 characters", async () => {
+    seedKey(db);
+    const res = await callIdem("{}", "x".repeat(256));
+    expect(res.status).toBe(400);
+  });
+
+  it("without an Idempotency-Key, repeated calls always execute (no record stored)", async () => {
+    seedKey(db);
+    await callIdem("{}", null);
+    await callIdem("{}", null);
+    expect(vi.mocked(executeWorkflow)).toHaveBeenCalledTimes(2);
+    const count = db.prepare(`SELECT COUNT(*) AS n FROM idempotency_keys`).get() as { n: number };
+    expect(count.n).toBe(0);
   });
 });
