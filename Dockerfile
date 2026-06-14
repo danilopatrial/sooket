@@ -12,6 +12,10 @@ RUN npm ci --omit=dev
 # Build the Next.js app
 FROM base AS builder
 COPY package.json package-lock.json ./
+# puppeteer (a devDependency, used only by the headless smoke-test) downloads a
+# Chrome binary in its postinstall, which fails in the build container and isn't
+# needed to build or run the app. Skip it.
+ENV PUPPETEER_SKIP_DOWNLOAD=1
 RUN npm ci
 COPY . .
 # Standalone output is opt-in (the npm package uses a regular build)
