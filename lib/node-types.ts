@@ -21,6 +21,8 @@ export interface AnthropicNodeData {
   model: string;
   systemPrompt: string;
   temperature: number;
+  /** Max output tokens for the completion (default 8192). */
+  maxTokens?: number;
   connectedHandles?: string[];
   onChange?: (data: Partial<AnthropicNodeData>) => void;
 }

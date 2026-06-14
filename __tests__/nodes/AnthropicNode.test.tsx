@@ -482,3 +482,32 @@ describe("selected state", () => {
     expect(screen.getByText("Anthropic")).toBeInTheDocument();
   });
 });
+
+// ─── Max Tokens ───────────────────────────────────────────────────────────────
+
+describe("max tokens", () => {
+  it("shows the Max Tokens label and defaults to 8192", () => {
+    render(<AnthropicNode {...makeProps()} />);
+    expect(screen.getByText("Max Tokens")).toBeInTheDocument();
+    expect(screen.getByRole("spinbutton")).toHaveValue(8192);
+  });
+
+  it("renders the configured maxTokens value", () => {
+    render(<AnthropicNode {...makeProps({ maxTokens: 2048 })} />);
+    expect(screen.getByRole("spinbutton")).toHaveValue(2048);
+  });
+
+  it("calls onChange with the new maxTokens", () => {
+    const onChange = vi.fn();
+    render(<AnthropicNode {...makeProps({ onChange })} />);
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1024" } });
+    expect(onChange).toHaveBeenCalledWith({ maxTokens: 1024 });
+  });
+
+  it("falls back to 8192 when cleared/invalid", () => {
+    const onChange = vi.fn();
+    render(<AnthropicNode {...makeProps({ onChange })} />);
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "" } });
+    expect(onChange).toHaveBeenCalledWith({ maxTokens: 8192 });
+  });
+});

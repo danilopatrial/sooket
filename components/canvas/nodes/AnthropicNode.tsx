@@ -28,6 +28,7 @@ function AnthropicNodeComponent({ data, selected }: NodeProps) {
   const model           = d.model           ?? "claude-sonnet-4-6";
   const systemPrompt    = d.systemPrompt    ?? "You are a helpful assistant";
   const temperature     = d.temperature     ?? 0.7;
+  const maxTokens       = d.maxTokens       ?? 8192;
   const connected       = d.connectedHandles ?? [];
   const onChange        = d.onChange;
 
@@ -177,6 +178,24 @@ function AnthropicNodeComponent({ data, selected }: NodeProps) {
             <p className="text-[11px] text-white/20">fixed for this model</p>
           </div>
         )}
+
+        {/* Max Tokens */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] text-white/30 uppercase tracking-wider">
+            Max Tokens <span className="normal-case text-white/20 font-normal">— output limit</span>
+          </p>
+          <input
+            type="number"
+            min={1}
+            value={maxTokens}
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10);
+              onChange?.({ maxTokens: Number.isFinite(v) && v >= 1 ? v : 8192 });
+            }}
+            className="w-full bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1
+                       text-[12px] text-white/80 font-mono focus:outline-none focus:border-violet-500/50"
+          />
+        </div>
 
         {/* History */}
         <div className="space-y-1.5">

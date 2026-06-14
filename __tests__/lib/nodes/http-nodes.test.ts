@@ -335,6 +335,41 @@ describe("anthropic executor", () => {
     await expect(anthropicExec.execute(makeNode("anthropic", {}), null, ctx))
       .rejects.toThrow(); // either decrypt or empty message error
   });
+
+  it("sends a configurable max_tokens (default 8192, invalid → default)", async () => {
+    const anthropicResponse = {
+      content: [{ type: "text", text: "hi" }],
+      usage: { input_tokens: 1, output_tokens: 1 },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      text: async () => JSON.stringify(anthropicResponse),
+      json: async () => anthropicResponse,
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    // Override getProviderKey so the node proceeds past key resolution (no decrypt).
+    const ctx = makeCtx({
+      getProviderKey: async () => "sk-ant-test",
+      inputFor: (h) => h === "userPrompt" ? { node: { id: "u", type: "text", data: {} }, sourceHandle: null } : null,
+      evalInput: async () => ({ value: "hello", inputTokens: 0, outputTokens: 0 }),
+    });
+    const bodyOf = () => JSON.parse((fetchMock.mock.calls[0][1] as { body: string }).body) as { max_tokens: number };
+
+    await anthropicExec.execute(makeNode("anthropic", { model: "claude-haiku-4-5-20251001", maxTokens: 1024 }), null, ctx);
+    expect(bodyOf().max_tokens).toBe(1024);
+
+    fetchMock.mockClear();
+    await anthropicExec.execute(makeNode("anthropic", { model: "claude-haiku-4-5-20251001" }), null, ctx);
+    expect(bodyOf().max_tokens).toBe(8192);
+
+    fetchMock.mockClear();
+    await anthropicExec.execute(makeNode("anthropic", { model: "claude-haiku-4-5-20251001", maxTokens: 0 }), null, ctx);
+    expect(bodyOf().max_tokens).toBe(8192);
+
+    fetchMock.mockClear();
+    await anthropicExec.execute(makeNode("anthropic", { model: "claude-haiku-4-5-20251001", maxTokens: 256.9 }), null, ctx);
+    expect(bodyOf().max_tokens).toBe(256);
+  });
 });
 
 // ─── OpenAI ───────────────────────────────────────────────────────────────────

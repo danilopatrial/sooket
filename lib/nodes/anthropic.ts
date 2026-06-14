@@ -14,6 +14,10 @@ class AnthropicNode implements INodeExecutor {
     let model        = aData.model        ?? "claude-sonnet-4-6";
     let systemPrompt = resolveVars(aData.systemPrompt ?? "", ctx.vars);
     let temperature  = aData.temperature  ?? 0.7;
+    // Max output tokens: configurable (was hard-coded to 8192). Floor to a
+    // positive integer; an unset/invalid value falls back to 8192.
+    const rawMaxTokens = Number(aData.maxTokens);
+    const maxTokens = Number.isFinite(rawMaxTokens) && rawMaxTokens >= 1 ? Math.floor(rawMaxTokens) : 8192;
     let userMessage  = "";
 
     const modelSrc = ctx.inputFor("model");
@@ -64,7 +68,7 @@ class AnthropicNode implements INodeExecutor {
       model,
       system: systemPrompt,
       messages: [...historyMessages, { role: "user", content: userMessage }],
-      max_tokens: 8192,
+      max_tokens: maxTokens,
     };
     if (!NO_TEMPERATURE_MODELS.has(model)) {
       anthropicPayload.temperature = temperature;

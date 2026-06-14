@@ -137,7 +137,7 @@ export const NODE_REGISTRY: NodeDef[] = [
     color: "bg-violet-500",
     icon: Sparkles,
     category: "ai",
-    defaultData: { model: "claude-sonnet-4-6", systemPrompt: "You are a helpful assistant", temperature: 0.7 },
+    defaultData: { model: "claude-sonnet-4-6", systemPrompt: "You are a helpful assistant", temperature: 0.7, maxTokens: 8192 },
     primaryInput: "userPrompt",
     primaryOutput: "output",
   },
