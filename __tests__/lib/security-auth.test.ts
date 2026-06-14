@@ -132,6 +132,7 @@ describe("isPublicPath", () => {
       "/api/workflows/abc/api-keys",
       "/api/account/api-key",
       "/api/credentials",
+      "/api/metrics",
       "/workflow",
       "/",
     ]) {

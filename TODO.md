@@ -217,7 +217,20 @@ can bolt providers on via the raw HTTP node, but then you lose token accounting,
 the credential model, and the canvas ergonomics. (Given this is positioned as AI
 middleware, an OpenAI-compatible node is the obvious gap.)
 
-### 2.4 Observability / metrics export
+### 2.4 Observability / metrics export — ✅ DONE (2026-06-14, Prometheus /metrics)
+Added a Prometheus text-exposition endpoint `GET /api/metrics` (`lib/metrics.ts`
++ `app/api/metrics/route.ts`): executions by status, request + token counters, a
+latency summary (`_sum`/`_count`), and live concurrency/queue gauges — all
+derived from the existing `executions`/`request_logs`/`workflows` tables and the
+`ExecutionSemaphore` (no schema change). Gated by the management shared secret
+(not in `isPublicPath`, so a scraper sends `Authorization: Bearer <SOOKET_AUTH_TOKEN>`).
+Collection and rendering are split for testing; label values are escaped and an
+empty DB still emits every metric. Covered by `__tests__/lib/metrics.test.ts`,
+`__tests__/api/metrics-route.test.ts`, and a gating assertion in the auth test;
+QA spec API-16; documented in AGENTS.md. The **readiness probe** half of this
+item shipped earlier as §6 (`/api/health?ready=1`). **Residual future scope:**
+OpenTelemetry traces and structured JSON stdout logs (noted in API-16).
+
 There's a `request_logs` table and a Logs tab, but no Prometheus `/metrics`
 endpoint, no OpenTelemetry traces, no structured JSON logs to stdout. I can't
 wire this into Grafana/Datadog/an SLO dashboard without writing an exporter

@@ -166,6 +166,7 @@ on the user's own machine or server.
 | `/api/admin/backup` | GET | Download the SQLite database file (management-key gated via `Authorization: Bearer sk-mw-*`) |
 | `/api/binary/[id]` | GET | Serve stored binary data by reference ID |
 | `/api/health` | GET | Liveness probe (`{ status, version, uptime, timestamp }`); add `?ready=1` for a readiness probe that round-trips the DB (read + write) and adds `checks: { db }`, returning HTTP 503 when the DB is unreachable/unwritable. Unauthenticated (`isPublicPath`); see `lib/db/health.ts` |
+| `/api/metrics` | GET | Prometheus text-exposition metrics (executions by status, request/token counters, latency summary, live concurrency/queue gauges). Derived from existing tables + the execution semaphore (`lib/metrics.ts`); **not** in `isPublicPath`, so gated by the management shared secret when `SOOKET_AUTH_TOKEN` is set |
 | `/api/complexity` | POST | Internal route used by the Complexity Score node canvas preview |
 
 ## Database
