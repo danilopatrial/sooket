@@ -335,7 +335,16 @@ swallows its own errors (`lib/workflow-engine.ts` `triggerErrorWorkflow`).
 
 ## 3. What makes me skeptical (architecture & positioning)
 
-### 3.1 It cannot scale horizontally — and the docs lean into that
+### 3.1 It cannot scale horizontally — and the docs lean into that — ✅ DONE (2026-06-14, stated plainly)
+Resolved by stating the limitation plainly in AGENTS.md ("Scaling & availability
+(single-process by design)"): per-process state (semaphore, in-memory caches,
+rate-limit accounting) means N replicas ≠ correct global limits; SQLite is the
+sole datastore with no HA/failover (backup = copy the `.db` file); it's a single
+point of failure with a throughput ceiling — fine for trusted internal/side-car
+use, not gateway-grade HA in front of production traffic. Framed as a deliberate
+product stance and cross-linked from the Caching/Versioning/Execution non-goals
+and §3.3. Documentation only.
+
 The README/AGENTS framing is "runs locally on your own server, single process."
 That's a fine product stance, but it has hard consequences the marketing of
 "API middleware platform" papers over:

@@ -113,6 +113,33 @@ Always run lint before committing. Typecheck is part of `npm run build`.
 Single-process app: a Next.js frontend + local SQLite backend, running entirely
 on the user's own machine or server.
 
+### Scaling & availability (single-process by design)
+
+Sooket is intentionally a **single Node.js process on a single machine** — great
+as an internal-glue / side-car middleware, but **not** a horizontally-scalable,
+gateway-grade HA layer. Put plainly so nobody sets it on a critical path
+expecting otherwise:
+
+- **State is per-process.** The execution semaphore (`lib/concurrency.ts`), the
+  per-API-key rate-limit accounting, and the in-memory eval caches live in one
+  process. You **cannot** put two replicas behind a load balancer and get correct
+  global concurrency or rate limiting — N replicas = roughly N× the intended
+  limits. (The Rate Limiter node + per-key limiter persist counters in SQLite, so
+  those would coordinate via a *shared DB file*, but the in-memory semaphore and
+  caches would not.)
+- **SQLite is the only datastore.** The write path is one machine; there is no
+  HA / failover. Backup is "copy the `.db` file" (`npm run backup`,
+  `/api/admin/backup`). WAL lets the optional execution server share the same file
+  (same host), but that is not multi-node replication.
+- **It is a single point of failure with a throughput ceiling.** Appropriate for
+  a trusted, single-tenant, internal deployment; if you need gateway-grade
+  availability in front of production traffic, front it with (or use) a system
+  built for that.
+
+This is a product stance, not a bug — features like per-workflow API keys and
+rate limits are conveniences within one instance, **not** a multi-tenant cluster
+(see also "Authentication & exposure" and §3.3).
+
 ### Data flow
 1. Users build workflow pipelines on the React Flow canvas at `/workflow/[slug]`
 2. Workflows are stored as JSON (`nodes`, `edges` arrays) in local SQLite
