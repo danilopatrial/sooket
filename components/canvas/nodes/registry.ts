@@ -50,6 +50,7 @@ import { RetryNode } from "./RetryNode";
 import { RateLimiterNode } from "./RateLimiterNode";
 import { ContentGuardrailNode } from "./ContentGuardrailNode";
 import { SchemaValidatorNode } from "./SchemaValidatorNode";
+import { OAuth2TokenNode } from "./OAuth2TokenNode";
 import { CustomCodeNode } from "./CustomCodeNode";
 import { RegexReplaceNode } from "./RegexReplaceNode";
 import { SentimentNode } from "./SentimentNode";
@@ -248,6 +249,18 @@ export const NODE_REGISTRY: NodeDef[] = [
     defaultData: { method: "GET", url: "", headers: [], timeout: 10000 },
     primaryInput: "url",
     primaryOutput: "res-body",
+  },
+  {
+    type: "oauth2-token",
+    component: OAuth2TokenNode,
+    label: "OAuth2 Token",
+    sub: "Fetch + cache a client-credentials token",
+    color: "bg-violet-500",
+    icon: KeyRound,
+    category: "external",
+    defaultData: { tokenUrl: "", clientId: "", clientSecret: "", scope: "", authStyle: "body", timeout: 10000 },
+    primaryInput: null,
+    primaryOutput: "token",
   },
   {
     type: "vector-upsert",

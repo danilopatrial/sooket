@@ -275,7 +275,19 @@ blue/green promotion. Setting `is_active` is an all-or-nothing flip. The A/B
 Split node is request-level, not deploy-level. For changing a live integration
 safely, deploy-level canary is what I'd reach for.
 
-### 2.7 Outbound auth / secret injection helpers
+### 2.7 Outbound auth / secret injection helpers — ✅ DONE (2026-06-14, OAuth2 node)
+Added an **OAuth2 Token** node (`lib/nodes/oauth2-token.ts` + `OAuth2TokenNode.tsx`)
+that runs the client-credentials grant and **caches the token until it (nearly)
+expires** in `node_cache` (TTL = `expires_in` − refresh skew), giving automatic
+refresh on the next run after it lapses — no hand-rolled token-fetch sub-pipeline.
+Credentials accept `$VAR` references (encrypted customer variables) and never
+appear in the cache key; the token URL is SSRF-guarded (`assertEgressAllowed`);
+credentials go in the form body or an HTTP Basic header. Outputs the access token
+for a downstream HTTP node to inject as `Authorization: Bearer {{ $node.<id> }}`.
+Registered in both registries; catalogue updated (External). Covered by executor +
+canvas tests (15); QA spec NODE-EXT-06. **Residual future scope:** AWS SigV4 / HMAC
+request signing and other grant types (HMAC is doable today via Custom Code).
+
 The HTTP node does `{{VAR}}` substitution into headers, but there's no built-in
 OAuth2 client-credentials grant, no automatic token refresh, no request signing
 (AWS SigV4, HMAC). Every integration that needs OAuth has to be hand-rolled with

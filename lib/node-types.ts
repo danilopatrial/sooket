@@ -164,6 +164,25 @@ export interface SchemaValidatorNodeData {
   connectedHandles?: string[];
 }
 
+export interface OAuth2TokenNodeData {
+  /** Token endpoint URL (supports `$VAR` customer variables). */
+  tokenUrl?: string;
+  /** OAuth2 client id (supports `$VAR`). */
+  clientId?: string;
+  /** OAuth2 client secret — prefer a `$VAR` reference over a literal. */
+  clientSecret?: string;
+  /** Optional space-delimited scopes (supports `$VAR`). */
+  scope?: string;
+  /** Where to put credentials: form "body" (default) or HTTP "basic" auth header. */
+  authStyle?: "body" | "basic";
+  /** Seconds shaved off `expires_in` before the cached token is considered stale. */
+  refreshSkewSeconds?: number;
+  /** Token-request timeout in ms (default 10000). */
+  timeout?: number;
+  onChange?: (data: Partial<OAuth2TokenNodeData>) => void;
+  connectedHandles?: string[];
+}
+
 export interface RateLimiterNodeData {
   keySource?: "workflow" | "ip" | "custom";
   windowSeconds?: number;

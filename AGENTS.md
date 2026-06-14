@@ -281,7 +281,8 @@ live in `components/canvas/nodes/`, execution logic in `lib/nodes/`.
 **Request**: Output (exit point), Response Builder, List Manager, Access List,
 Auth Validator
 
-**External**: HTTP Request, Vector Upsert, Vector Search, Webhook, Sub-Workflow
+**External**: HTTP Request, OAuth2 Token, Vector Upsert, Vector Search, Webhook,
+Sub-Workflow
 
 **Format**: JSON Parser, JSON Builder, XML ↔ JSON, Template String
 

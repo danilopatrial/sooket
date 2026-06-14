@@ -208,6 +208,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [NODE-EXT-03] Vector Search node — Supabase and Pinecone provider tabs, top-K config, 15-second timeout — [spec](specs/NODE-EXT-03.md)
 - [x] [NODE-EXT-04] Vector Upsert node — Supabase and Pinecone provider tabs, random UUID generated if no ID provided (Pinecone) — [spec](specs/NODE-EXT-04.md)
 - [x] [NODE-EXT-05] Webhook node — fire-and-forget: errors are silently swallowed; no failure output — [spec](specs/NODE-EXT-05.md)
+- [x] [NODE-EXT-06] OAuth2 Token node — client-credentials grant, token cached until expiry (auto-refresh), $VAR secrets, SSRF-guarded, body vs basic auth — [spec](specs/NODE-EXT-06.md)
 
 ---
 
