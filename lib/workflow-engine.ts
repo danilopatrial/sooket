@@ -60,6 +60,45 @@ export function executionTimeoutMs(): number {
   return Math.floor(parsed);
 }
 
+// ─── Execution depth guard ───────────────────────────────────────────────────
+
+/** Stable message prefix for an execution whose graph recursed too deeply. */
+export const WORKFLOW_DEPTH_ERROR = "Workflow execution depth exceeded";
+
+/** Default cap on graph recursion depth (nodes on a single active path). */
+export const DEFAULT_MAX_EXECUTION_DEPTH = 1000;
+
+/**
+ * Thrown when an execution's active path recurses past {@link executionMaxDepth}.
+ * `evaluateNode` recurses on the JS call stack, and cycle detection only catches
+ * *circular* references — a legitimately deep (acyclic) chain, e.g. a generated
+ * workflow, would otherwise blow the stack with a `RangeError`. This converts
+ * that into a clean, catchable failure. Terminal like {@link WorkflowTimeoutError}:
+ * never resumed by an error edge.
+ */
+export class WorkflowDepthError extends Error {
+  readonly limit: number;
+  constructor(limit: number) {
+    super(`${WORKFLOW_DEPTH_ERROR} (max ${limit})`);
+    this.name = "WorkflowDepthError";
+    this.limit = limit;
+  }
+}
+
+/**
+ * Resolve the max recursion depth from `EXECUTION_MAX_DEPTH`, defaulting to
+ * {@link DEFAULT_MAX_EXECUTION_DEPTH}. A missing/empty/non-numeric value falls
+ * back to the default; a non-positive value disables the guard (returns 0).
+ */
+export function executionMaxDepth(): number {
+  const raw = process.env.EXECUTION_MAX_DEPTH?.trim();
+  if (raw === undefined || raw === "") return DEFAULT_MAX_EXECUTION_DEPTH;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed)) return DEFAULT_MAX_EXECUTION_DEPTH;
+  if (parsed <= 0) return 0;
+  return Math.floor(parsed);
+}
+
 // ─── Variable resolution ─────────────────────────────────────────────────────
 
 async function loadCustomerVars(
@@ -285,6 +324,15 @@ async function evaluateNode(
     throw new WorkflowTimeoutError(executionTimeoutMs());
   }
 
+  // Depth guard: `visiting` holds exactly the ancestors on the current active
+  // path (cycles are rejected, so every member is distinct), making its size
+  // the live recursion depth. Reject before descending further so a deep
+  // acyclic chain throws cleanly instead of overflowing the JS call stack.
+  // Cached/pinned reads above are non-recursive and exempt.
+  if (reqCtx.maxDepth !== undefined && visiting.size >= reqCtx.maxDepth) {
+    throw new WorkflowDepthError(reqCtx.maxDepth);
+  }
+
   // Pinned-data short-circuit: return the frozen result without executing the node.
   if (workflow.pinData?.[nodeId]) {
     const pinned = workflow.pinData[nodeId];
@@ -346,9 +394,10 @@ async function evaluateNode(
     traceOutput = result.value;
     return result;
   } catch (err) {
-    // A blown deadline is terminal: never let an error edge catch it and resume
-    // the graph, or the execution budget would be unbounded in practice.
-    if (err instanceof WorkflowTimeoutError) throw err;
+    // A blown deadline or depth limit is terminal: never let an error edge catch
+    // it and resume the graph (the budget would be unbounded; the depth limit
+    // would just be re-hit one frame down).
+    if (err instanceof WorkflowTimeoutError || err instanceof WorkflowDepthError) throw err;
     const errMsg = err instanceof Error ? err.message : String(err);
     const hasErrorEdge = workflow.edges.some(
       (e) => e.source === nodeId && e.connectionType === "error"
@@ -472,6 +521,13 @@ export async function executeWorkflow(
     if (limit > 0) reqCtx.deadlineAt = Date.now() + limit;
   }
 
+  // Arm the recursion-depth guard once, top-level only. Sub-workflows inherit
+  // the parent's limit through the shared reqCtx (a caller-set value is kept).
+  if (subDepth === 0 && reqCtx.maxDepth === undefined) {
+    const limit = executionMaxDepth();
+    if (limit > 0) reqCtx.maxDepth = limit;
+  }
+
   const outputNodes = workflow.nodes.filter((n) => n.type === "workflowOutput");
   const outputEdges = workflow.edges.filter((e) => outputNodes.some((o) => o.id === e.target));
   if (outputEdges.length === 0) {
@@ -499,7 +555,7 @@ export async function executeWorkflow(
         );
         if (r.active !== false) { result = r; break; }
       } catch (err) {
-        error = err instanceof WorkflowTimeoutError ? err.message : String(err);
+        error = err instanceof WorkflowTimeoutError || err instanceof WorkflowDepthError ? err.message : String(err);
         if (workflow.errorWorkflowId != null) {
           try {
             await triggerErrorWorkflow(workflow, error, encryptionSecret, adapter);

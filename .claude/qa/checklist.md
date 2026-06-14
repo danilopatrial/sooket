@@ -285,6 +285,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [ENGINE-08] Memoization: each node runs at most once per request regardless of how many nodes reference it — [spec](specs/ENGINE-08.md)
 - [x] [ENGINE-09] Execution deadline: a run past `EXECUTION_TIMEOUT_MS` aborts and returns 504 (not absorbed by error edges) — [spec](specs/ENGINE-09.md)
 - [x] [ENGINE-10] Queue-wait timeout: a request queued past `EXECUTION_QUEUE_TIMEOUT_MS` gives up with 503 instead of waiting forever — [spec](specs/ENGINE-10.md)
+- [x] [ENGINE-11] Recursion depth guard: an acyclic chain deeper than `EXECUTION_MAX_DEPTH` aborts with a clean depth error (HTTP 400, not a RangeError crash; not absorbed by error edges) — [spec](specs/ENGINE-11.md)
 
 ---
 

@@ -12,6 +12,7 @@ vi.mock("@/lib/workflow-engine", () => ({
   executeWorkflow: vi.fn(),
   NO_OUTPUT_CONNECTED_ERROR: "No output node is connected",
   WORKFLOW_TIMEOUT_ERROR: "Workflow execution timed out",
+  WORKFLOW_DEPTH_ERROR: "Workflow execution depth exceeded",
 }));
 
 vi.mock("@/lib/concurrency", () => ({
@@ -227,6 +228,18 @@ describe("handleExecutionRequest — auth flow", () => {
     const { status, body } = await call("sk-wf-valid");
     expect(status).toBe(504);
     expect((body as Record<string, unknown>).error).toContain("timed out");
+  });
+
+  it("returns 400 (not 500) when the execution depth limit is exceeded", async () => {
+    seedKey(db);
+    vi.mocked(executeWorkflow).mockResolvedValueOnce({
+      result: null,
+      error: "Workflow execution depth exceeded (max 1000)",
+      traces: [],
+    });
+    const { status, body } = await call("sk-wf-valid");
+    expect(status).toBe(400);
+    expect((body as Record<string, unknown>).error).toContain("depth exceeded");
   });
 
   it("200 when body is empty string (treated as empty object)", async () => {

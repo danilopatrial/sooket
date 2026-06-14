@@ -275,7 +275,22 @@ That's a fine product stance, but it has hard consequences the marketing of
   with a throughput ceiling. I'd want this stated plainly so nobody puts it on a
   critical path expecting gateway-grade availability.
 
-### 3.2 The recursive engine has no depth guard beyond cycle detection
+### 3.2 The recursive engine has no depth guard beyond cycle detection — ✅ DONE (2026-06-14)
+Implemented a per-execution recursion-depth guard. `evaluateNode` now throws a
+terminal `WorkflowDepthError` once the active path exceeds `EXECUTION_MAX_DEPTH`
+(default 1000, `0`/negative disables) — checked via `visiting.size` (the set
+holds exactly the live ancestors, so its size is the recursion depth), so a deep
+acyclic chain aborts cleanly instead of blowing the JS stack with a `RangeError`.
+Armed once for the top-level run and inherited by sub-workflows through the
+shared `reqCtx.maxDepth` (so a chain of nested sub-workflows is bounded across
+the whole execution, independent of the existing depth-5 sub-workflow cap). Like
+the deadline, it bypasses error-edge routing; the handler maps it to HTTP 400
+(a workflow-structure error, distinct from a 500). Scope note: this bounds
+*path depth* (the stack-overflow vector); wide/shallow graphs remain bounded by
+the execution deadline (§1.1) and concurrency cap. Covered by unit tests
+(`__tests__/lib/workflow-engine-depth.test.ts`, incl. a 3000-deep chain proving
+no crash) + handler mapping test + QA spec ENGINE-11.
+
 `evaluateNode` recurses through the graph and protects against *cycles* with a
 `visiting` set, but a legitimately deep (non-cyclic) chain recurses on the JS
 call stack. A pathological or generated workflow could blow the stack

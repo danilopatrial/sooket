@@ -8,7 +8,7 @@
  */
 import type { DatabaseSync } from "node:sqlite";
 import { getDb } from "@/lib/db";
-import { executeWorkflow, NO_OUTPUT_CONNECTED_ERROR, WORKFLOW_TIMEOUT_ERROR, type Workflow } from "@/lib/workflow-engine";
+import { executeWorkflow, NO_OUTPUT_CONNECTED_ERROR, WORKFLOW_TIMEOUT_ERROR, WORKFLOW_DEPTH_ERROR, type Workflow } from "@/lib/workflow-engine";
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
@@ -282,6 +282,9 @@ export async function handleExecutionRequest(
   if (error) {
     if (error === NO_OUTPUT_CONNECTED_ERROR) return finalize(fail({ error }, 400));
     if (error.includes(WORKFLOW_TIMEOUT_ERROR)) return finalize(fail({ error }, 504));
+    // A graph too deep to evaluate is a workflow-structure (client) error, not a
+    // runtime fault — surface 400 so it's distinct from a genuine 500.
+    if (error.includes(WORKFLOW_DEPTH_ERROR)) return finalize(fail({ error }, 400));
     return finalize(fail({ error }, 500));
   }
   if (!result) return finalize(fail({ error: "No active path reached any output node" }, 400));

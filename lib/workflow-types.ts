@@ -51,6 +51,15 @@ export interface ReqContext {
    * same value through the shared context so a deep call chain can't outlast it.
    */
   deadlineAt?: number;
+  /**
+   * Max recursion depth (nodes on a single active path) for the whole
+   * execution. The engine checks it at every node boundary and aborts with a
+   * `WorkflowDepthError` before the JS call stack can overflow on a pathological
+   * or generated deep (acyclic) chain. Set automatically by `executeWorkflow`
+   * for top-level runs from `EXECUTION_MAX_DEPTH`; sub-workflows inherit the
+   * same value through the shared context. `0` / undefined disables the guard.
+   */
+  maxDepth?: number;
 }
 
 export interface WorkflowExecutionResult {
