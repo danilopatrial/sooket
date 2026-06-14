@@ -17,7 +17,7 @@
  *   SOOKET_DATA_DIR     — optional SQLite data directory override
  */
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { handleExecutionRequest, CORS_HEADERS } from "@/lib/execution-handler";
+import { handleExecutionRequest, corsHeaders } from "@/lib/execution-handler";
 import { warnIfExposedWithoutAuth } from "@/lib/security/auth";
 
 const PORT = Number(process.env.EXECUTION_PORT ?? 3001);
@@ -43,15 +43,14 @@ function sendJson(res: ServerResponse, status: number, body: unknown, extra?: Re
   const payload = typeof body === "string" ? body : JSON.stringify(body);
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...CORS_HEADERS,
     ...extra,
   };
   res.writeHead(status, headers);
   res.end(payload);
 }
 
-function sendCors(res: ServerResponse) {
-  res.writeHead(204, CORS_HEADERS);
+function sendCors(res: ServerResponse, cors: Record<string, string>) {
+  res.writeHead(204, cors);
   res.end();
 }
 
@@ -61,15 +60,21 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
   const url = req.url ?? "/";
   const method = req.method?.toUpperCase() ?? "GET";
 
+  // Resolve the CORS policy for this request's Origin (deny-by-default unless
+  // CORS_ORIGIN opts in). The /v1/chat path uses the headers returned by the
+  // execution handler instead.
+  const originHeader = req.headers.origin;
+  const cors = corsHeaders(typeof originHeader === "string" ? originHeader : null);
+
   // OPTIONS preflight for all paths
   if (method === "OPTIONS") {
-    sendCors(res);
+    sendCors(res, cors);
     return;
   }
 
   // Health check
   if (url === "/health" && method === "GET") {
-    sendJson(res, 200, { ok: true });
+    sendJson(res, 200, { ok: true }, cors);
     return;
   }
 
@@ -98,7 +103,7 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
 
     const fullUrl = `http://localhost:${PORT}${url}`;
 
-    const { status, body, corsHeaders } = await handleExecutionRequest({
+    const { status, body, corsHeaders: responseCors } = await handleExecutionRequest({
       apiKey,
       rawBody,
       headers,
@@ -107,12 +112,12 @@ const server = createServer(async (req: IncomingMessage, res: ServerResponse) =>
       url: fullUrl,
     });
 
-    sendJson(res, status, body, corsHeaders);
+    sendJson(res, status, body, responseCors);
     return;
   }
 
   // 404 for everything else
-  sendJson(res, 404, { error: "Not found" });
+  sendJson(res, 404, { error: "Not found" }, cors);
 });
 
 warnIfExposedWithoutAuth();
