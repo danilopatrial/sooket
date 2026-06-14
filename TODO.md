@@ -238,7 +238,20 @@ myself. `/api/health` only reports uptime; the `/api/v1/chat` GET health check
 merely asserts `ENCRYPTION_SECRET` is set — neither is a real readiness probe
 (DB reachable? migrations applied? queue depth?).
 
-### 2.5 Response caching at the edge
+### 2.5 Response caching at the edge — ✅ DONE (2026-06-14, documented model + non-goal)
+Resolved as a documentation/positioning item — no new code warranted. The
+execution API is `POST` with side effects, so HTTP-edge caching / `If-None-Match`
+→ `304` doesn't fit (a 304 wouldn't skip re-execution, only body transfer). The
+practical caching needs are already met by existing primitives, now documented as
+a layered model in AGENTS.md ("Caching & response control"): the **Cache** /
+**Semantic Cache** nodes skip re-execution; **`Idempotency-Key`** makes retries
+side-effect-safe; the **Response Builder** node lets an author set
+`Cache-Control`/`ETag` per workflow (merged last into the response — already
+covered by API-13) to opt a genuinely-cacheable endpoint into downstream
+CDN/browser caching. A shared cache across replicas is an explicit **non-goal**
+(single-process by design — see §3.1). No test added (Response Builder header
+passthrough is covered by API-13).
+
 There's a Cache node and a Semantic Cache node (nice), but no HTTP-level response
 caching with ETag / `Cache-Control` honoring, and no shared cache across
 replicas. The node caches live in SQLite which helps, but the semantics are

@@ -218,6 +218,29 @@ Node traces are accumulated in a `NodeTrace[]` array. When the same node is
 evaluated for multiple connected output handles, the trace entries are
 **merged** — a single row per node with outputs keyed by handle name.
 
+## Caching & response control
+
+Caching is layered, and deliberately lives **inside the workflow** rather than at
+an HTTP edge — the execution API is `POST` with side effects, so HTTP response
+caching / `If-None-Match` → `304` doesn't fit (a 304 wouldn't skip re-execution,
+only the body transfer). The layers:
+
+- **Skip re-execution** with the **Cache** node (TTL key/value in `node_cache`)
+  or the **Semantic Cache** node (embedding similarity in `semantic_cache`) —
+  this is the right place to avoid repeating expensive upstream calls.
+- **Make retries safe** with the `Idempotency-Key` header on `POST /api/v1/chat`
+  (stores + replays the first response; see `lib/idempotency.ts`) so a client
+  retry doesn't duplicate side effects.
+- **Control HTTP response headers** (`Cache-Control`, `ETag`, …) per workflow via
+  the **Response Builder** node: its `headers` are merged last into the response
+  (`lib/execution-handler.ts`), so an author can opt a specific, genuinely
+  cacheable endpoint into downstream CDN/browser caching. Covered by API-13.
+
+**Non-goal:** a shared response cache across replicas. Sooket is single-process
+by design (see §3.1 in TODO / the scaling note); there is no second process to
+share a cache with, and the node caches already persist in the shared SQLite
+file used by the optional execution server.
+
 ## Node Development
 
 ### Catalogue
