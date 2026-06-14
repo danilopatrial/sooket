@@ -312,7 +312,20 @@ No JSON-Schema/OpenAPI validation node for the incoming body or the outgoing
 response. JSON Parser/Builder exist but won't reject a malformed contract. A
 gateway usually wants to validate-and-reject at the boundary.
 
-### 2.9 Dead-letter / async execution / scheduled triggers
+### 2.9 Dead-letter / async execution / scheduled triggers — ✅ DONE (2026-06-14, documented model + non-goal)
+Resolved as documentation. Synchronous request/response is the deliberate model;
+in-graph resilience already exists and is now documented in AGENTS.md ("Execution
+model & resilience"): the **Retry** node (backoff), **Try/Catch** + `error` edges
+(catch-and-branch), and the **error workflow** hook (`error_workflow_id` →
+`triggerErrorWorkflow`, which intentionally swallows its own errors so a failing
+error workflow can't mask the original, with an infinite-loop guard). **Scheduled
+runs** are driven externally (cron/systemd timer → the workflow's API key or
+webhook URL) since a local-first process isn't an always-on daemon. A durable
+async queue / DLQ and fire-and-forget-with-retry *delivery* are explicit
+**non-goals** of the single-process model (§3.1); the Webhook node already covers
+fire-and-forget outbound calls. No code change — the building blocks exist and
+the "swallows its own errors" behaviour is correct by design.
+
 Execution is synchronous request/response only. There's no queue/DLQ for failed
 async work, no cron/scheduled workflow trigger, no "fire and forget with retry"
 delivery. The error-workflow hook is the closest thing, but it's best-effort and

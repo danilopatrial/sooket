@@ -261,6 +261,32 @@ graph rather than as a separate deploy system:
 side by side behind a router with promotion. That belongs to a multi-process /
 orchestrated deployment, which is outside the single-process design (§3.1).
 
+## Execution model & resilience
+
+Execution is **synchronous request/response** by design: a caller hits
+`POST /api/v1/chat` (or a webhook), the graph runs, and the result is returned on
+that connection. Resilience is expressed in-graph rather than via a background
+job system:
+
+- **Transient retries** — the **Retry** node re-runs its subtree with backoff;
+  the HTTP Request node has its own per-call timeout.
+- **Catch & branch on failure** — the **Try/Catch** node and `error`-typed edges
+  route a failing node's error down an alternate path within the same execution.
+- **Failure escalation** — a workflow's `error_workflow_id` invokes a separate
+  **error workflow** when the main run fails (`triggerErrorWorkflow`). It is
+  best-effort and deliberately swallows its *own* errors so a failing error
+  workflow can't mask the original failure (and it can't chain to a further error
+  workflow — infinite-loop guard).
+- **Scheduled / recurring runs** — driven externally: point cron / a systemd
+  timer / any scheduler at the workflow's API key or webhook URL. The process is
+  local-first and not assumed to be an always-on daemon, so in-process cron isn't
+  built in.
+
+**Non-goals:** a durable async queue / dead-letter queue and "fire-and-forget
+with retry" delivery. Those imply a persistent worker pool and broker — a
+multi-process concern outside the single-process model (§3.1). The Webhook node
+covers fire-and-forget *outbound* calls (errors swallowed; see NODE-EXT-05).
+
 ## Node Development
 
 ### Catalogue
