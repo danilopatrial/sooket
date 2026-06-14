@@ -462,3 +462,24 @@ loopback (`SOOKET_HOST` defaults to `127.0.0.1`). Two safeguards back this up:
 
 This is a single shared password, **not** a multi-user account system — do not
 add login/sessions/user tables under this banner.
+
+### Trust boundary: calling vs editing
+
+There are exactly **two** privilege levels, and the gap between them is large:
+
+- **Can call a workflow** — holds an `sk-wf-*` key (and passes the workflow's
+  access list / rate limit / scopes). Runs the pipeline; cannot change it.
+- **Can edit workflows** — passes the `SOOKET_AUTH_TOKEN` management gate (or the
+  gate is unset, i.e. open). **Editing a workflow is equivalent to running
+  arbitrary code on the host**: the Custom Code node executes in a hardened but
+  not-guaranteed `node:vm` (see §1.3 — *not* a real sandbox), and outbound nodes
+  can reach anything egress allows. **Treat management access as shell access to
+  the box.**
+
+The per-workflow API keys, scopes, access lists, and rate limits are conveniences
+for organizing *callers* within one trusted instance — they are **not** tenant
+isolation boundaries. Do **not** hand the management surface (one shared password)
+to several mutually-untrusting teams and treat per-workflow keys as walls between
+them: anyone past the gate can read/edit every workflow and every stored
+credential, and `/api/admin/backup` streams the whole DB. Multi-tenant isolation
+is a non-goal of this model (see §3.1 single-process / §3.3).

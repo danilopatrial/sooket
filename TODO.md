@@ -382,7 +382,18 @@ call stack. A pathological or generated workflow could blow the stack
 (`RangeError`). Sub-workflows cap at depth 5, but intra-workflow depth is
 unbounded. An explicit node-count / depth limit per execution would be prudent.
 
-### 3.3 Security model is "one shared password" but the feature set implies multi-tenant
+### 3.3 Security model is "one shared password" but the feature set implies multi-tenant — ✅ DONE (2026-06-14, trust boundary made loud)
+Resolved by making the trust boundary explicit in AGENTS.md ("Trust boundary:
+calling vs editing"): exactly two privilege levels — *can call a workflow*
+(`sk-wf-*` key) vs *can edit workflows* (`SOOKET_AUTH_TOKEN` gate), and **editing
+is equivalent to host shell access** (Custom Code `node:vm` is hardened but not a
+real sandbox per §1.3; outbound nodes reach anything egress allows). Spelled out
+that per-workflow keys/scopes/access-lists/rate-limits are caller-organization
+conveniences **not** tenant isolation, that anyone past the gate can read/edit
+every workflow + credential and `/api/admin/backup` streams the whole DB, and
+that multi-tenant isolation is a non-goal. Documentation only — the boundary is
+now loud (the enforcement itself, e.g. the Custom Code hardening, shipped in §1.3).
+
 `SOOKET_AUTH_TOKEN` is a single instance-wide secret (AGENTS.md is explicit:
 "not a multi-user account system"). Yet there are per-workflow API keys, scopes,
 access lists, and rate limits — all the trappings of multi-tenant. The mismatch
