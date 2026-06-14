@@ -367,6 +367,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [EDGE-08] A/B Split node with weights not summing to 100% — UI warns, execution behavior is defined — [spec](specs/EDGE-08.md)
 - [x] [EDGE-09] Import of a JSON file with invalid structure shows a clear validation error — [spec](specs/EDGE-09.md)
 - [x] [EDGE-10] SQLite write contention: busy_timeout makes contended writes wait instead of throwing SQLITE_BUSY (no intermittent 500s) — [spec](specs/EDGE-10.md)
+- [x] [EDGE-11] Docker image builds on a glibc base and the embedder loads onnxruntime lazily (no musl/ld-linux failure during `next build`) — [spec](specs/EDGE-11.md)
 
 ---
 

@@ -367,7 +367,23 @@ spec API-15; documented in `.env.example` and AGENTS.md.
 
 Liveness behavior (`GET /api/health` with no flag) stays exactly as-is.
 
-## 7. Docker image fails to build on current main — onnxruntime needs glibc, base image is musl
+## 7. Docker image fails to build on current main — onnxruntime needs glibc, base image is musl — ✅ DONE (2026-06-14)
+Implemented all three fixes: (1) Dockerfile base moved off musl to glibc
+(`node:22-alpine` → `node:22-slim`), with the runner stage switched to Debian's
+`groupadd`/`useradd`. (2) `lib/complexity/embedder.ts` now imports the
+`@huggingface/transformers` *runtime* lazily (`const { pipeline } = await
+import(...)` inside `getEmbedder()`), keeping only an erased `import type` at the
+top — so `next build`'s page-data collection for `/api/complexity` no longer
+loads `onnxruntime-node`. (3) `docker.yml` gained a no-push `build` job gated on
+`pull_request` + branch pushes (`if: !startsWith(github.ref, 'refs/tags/')`), so
+an unbuildable image can't land on `main`; `publish` stays tag/dispatch-gated.
+Also added a `.dockerignore` (keeps `data/`, `*.db`, and `.env*` out of the image
+— leak prevention) since the builder uses `COPY . .`. Verified: `SOOKET_STANDALONE=1
+npm run build` succeeds (page data collected, `server.js` emitted, no
+onnxruntime/ld-linux error), full suite + lint green, regression test
+`__tests__/lib/embedder-lazy-import.test.ts`, QA spec EDGE-11. Note: an actual
+`docker build` couldn't run in this sandbox (no daemon access) — the glibc/musl
+dimension is now exercised by the new CI `build` job.
 
 Found 2026-06-11 building `docker build -t sooket:local .` from a fresh clone
 of `main` (`c3ce179`, tag `v0.1.2`), while wiring up the hosted control plane
@@ -388,15 +404,15 @@ the Dockerfile's `node:22-alpine` base is musl, so the glibc loader
 (`ld-linux-x86-64.so.2`) doesn't exist. **This blocks any Docker deployment of
 current main, including every sooket.cloud tenant image.**
 
-- [ ] Dockerfile: move all stages off musl, e.g. `FROM node:22-slim` —
+- [x] Dockerfile: move all stages off musl, e.g. `FROM node:22-slim` —
       onnxruntime-node ships glibc binaries only. (Alpine + `gcompat` also
       works on paper but is flaky with onnxruntime; not recommended.)
       Mind the runner stage: Debian uses `groupadd`/`useradd`, not
       `addgroup`/`adduser` with those flags.
-- [ ] `lib/complexity/embedder.ts`: import `@huggingface/transformers` lazily
+- [x] `lib/complexity/embedder.ts`: import `@huggingface/transformers` lazily
       inside the function (`await import(...)`) so `next build` never loads
       the native runtime just to collect page data. This alone unblocks the
       *build*; the complexity endpoint still needs glibc at runtime, so the
       base-image fix matters regardless.
-- [ ] CI: add a `docker build .` job so an unbuildable image can't land on
+- [x] CI: add a `docker build .` job so an unbuildable image can't land on
       `main` again.

@@ -1,5 +1,9 @@
 import "server-only";
-import { pipeline, type FeatureExtractionPipeline } from "@huggingface/transformers";
+// Type-only import: erased at compile time, so it does NOT load the native
+// onnxruntime at module load. The runtime `pipeline` is imported lazily inside
+// getEmbedder() (see below) so `next build`'s page-data collection never pulls
+// in onnxruntime-node — its prebuilt .so is glibc-only and breaks otherwise.
+import type { FeatureExtractionPipeline } from "@huggingface/transformers";
 
 const SIMPLE_EXAMPLES = [
   "What is the capital of France?",
@@ -43,6 +47,7 @@ let complexEmbeddings: number[][] | null = null;
 
 async function getEmbedder(): Promise<FeatureExtractionPipeline> {
   if (!embedderInstance) {
+    const { pipeline } = await import("@huggingface/transformers");
     embedderInstance = await pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
       dtype: "fp32",
     });

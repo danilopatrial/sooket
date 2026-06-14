@@ -1,0 +1,32 @@
+# Build context hygiene: keep host-only deps, build artifacts, local state, and
+# (critically) secrets out of the image. `COPY . .` in the builder stage would
+# otherwise bake data/sooket.db and .env.local into the published GHCR image.
+node_modules
+.next
+out
+
+# Version control / CI / tooling
+.git
+.github
+.claude
+.vscode
+
+# Local SQLite data and any DB files
+data
+*.db
+*.db-wal
+*.db-shm
+
+# Secrets / local env — runtime injects these; never ship them in the image
+.env
+.env.*
+!.env.example
+
+# Tests and coverage (not needed to build the app)
+__tests__
+coverage
+
+# Misc
+npm-debug.log*
+.DS_Store
+*.local

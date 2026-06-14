@@ -1,4 +1,7 @@
-FROM node:22-alpine AS base
+# Debian (glibc), NOT alpine (musl): onnxruntime-node — pulled in transitively by
+# @huggingface/transformers (Complexity Score / Semantic Cache nodes) — ships
+# glibc-only prebuilt binaries whose .so fails to load under musl's loader.
+FROM node:22-slim AS base
 WORKDIR /app
 
 # Install dependencies
@@ -20,9 +23,9 @@ FROM base AS runner
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Create non-root user
-RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 nextjs
+# Create non-root user (Debian: groupadd/useradd, not alpine's addgroup/adduser)
+RUN groupadd --system --gid 1001 nodejs && \
+    useradd --system --uid 1001 --gid nodejs nextjs
 
 # Copy built assets
 COPY --from=builder /app/.next/standalone ./
