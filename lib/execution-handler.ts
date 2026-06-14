@@ -13,6 +13,7 @@ import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { executionSemaphore } from "@/lib/concurrency";
 import { hashApiKey } from "@/lib/security/api-keys";
+import { sanitizeExecutionError } from "@/lib/security/error-sanitize";
 import { consumeSlidingWindow } from "@/lib/rate-limit";
 import {
   extractIdempotencyKey,
@@ -330,7 +331,12 @@ export async function handleExecutionRequest(
     // A graph too deep to evaluate is a workflow-structure (client) error, not a
     // runtime fault — surface 400 so it's distinct from a genuine 500.
     if (error.includes(WORKFLOW_DEPTH_ERROR)) return finalize(fail({ error }, 400));
-    return finalize(fail({ error }, 500));
+    // Any other failure is unexpected and may carry internal detail (upstream
+    // provider bodies, stack traces, paths) — sanitise to a generic message +
+    // correlation id before it crosses the trust boundary. The full error stays
+    // in the execution record (Logs tab) and is logged under the same id.
+    const { message, logId } = sanitizeExecutionError(error);
+    return finalize(fail({ error: message, logId }, 500));
   }
   if (!result) return finalize(fail({ error: "No active path reached any output node" }, 400));
 

@@ -325,7 +325,21 @@ Auth is via Bearer key so it's not catastrophic, but a wildcard CORS default on
 an execution API invites browser-side key usage from any origin. I'd default to
 deny and make the operator opt in to origins.
 
-### 3.5 Error messages can leak upstream detail
+### 3.5 Error messages can leak upstream detail — ✅ DONE (2026-06-14)
+Implemented boundary sanitisation. New `lib/security/error-sanitize.ts`
+(`sanitizeExecutionError`) maps an *unexpected* execution error to a generic
+message (`"Internal error executing the workflow"`) + a `randomUUID` correlation
+`logId`, logging the full raw error server-side under that id. Wired into the
+catch-all 500 branch of `handleExecutionRequest` and the webhook route, **after**
+the safe self-authored mappings (no-output → 400, timeout → 504, depth → 400)
+which keep their explicit messages. So upstream provider response bodies (the
+Anthropic/OpenAI nodes rethrow them verbatim), stack traces, and filesystem
+paths no longer cross the trust boundary, while the operator keeps full detail in
+the execution record (Logs tab) and the correlated stderr line. The
+operator-gated debug route is intentionally left verbatim. Covered by
+`__tests__/lib/error-sanitize.test.ts` + boundary assertions in chat/webhook
+route tests; QA spec SEC-15.
+
 The Anthropic node rethrows `Upstream provider error: ${errText}` verbatim. The
 HTTP node is careful to strip query strings from URLs in errors (good!), but the
 provider-error passthrough and the generic `String(err)` surfaced as a 500 body

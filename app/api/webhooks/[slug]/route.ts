@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { executeWorkflow, WORKFLOW_TIMEOUT_ERROR, type Workflow } from "@/lib/workflow-engine";
+import { executeWorkflow, WORKFLOW_TIMEOUT_ERROR, WORKFLOW_DEPTH_ERROR, type Workflow } from "@/lib/workflow-engine";
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
 import { corsHeaders } from "@/lib/execution-handler";
+import { sanitizeExecutionError } from "@/lib/security/error-sanitize";
 import type { EvalResult } from "@/lib/workflow-types";
 import { executionSemaphore } from "@/lib/concurrency";
 import { readLimitedText, RequestBodyTooLargeError } from "@/lib/request-limit";
@@ -112,8 +113,17 @@ async function handleWebhook(request: Request, slug: string): Promise<Response> 
   }
 
   if (error) {
-    const status = error.includes(WORKFLOW_TIMEOUT_ERROR) ? 504 : 500;
-    return NextResponse.json({ ok: false, error }, { status, headers: CORS_HEADERS });
+    // Safe, self-authored errors keep their message + status; anything else is
+    // unexpected and sanitised to a generic message + correlation id so internal
+    // detail (upstream bodies, stack traces) doesn't cross the trust boundary.
+    if (error.includes(WORKFLOW_TIMEOUT_ERROR)) {
+      return NextResponse.json({ ok: false, error }, { status: 504, headers: CORS_HEADERS });
+    }
+    if (error.includes(WORKFLOW_DEPTH_ERROR)) {
+      return NextResponse.json({ ok: false, error }, { status: 400, headers: CORS_HEADERS });
+    }
+    const { message, logId } = sanitizeExecutionError(error);
+    return NextResponse.json({ ok: false, error: message, logId }, { status: 500, headers: CORS_HEADERS });
   }
 
   if (!result) {

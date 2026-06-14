@@ -27,6 +27,8 @@ vi.mock("@/lib/db/workflow-hooks", () => ({
 
 vi.mock("@/lib/workflow-engine", () => ({
   executeWorkflow: vi.fn(),
+  WORKFLOW_TIMEOUT_ERROR: "Workflow execution timed out",
+  WORKFLOW_DEPTH_ERROR: "Workflow execution depth exceeded",
 }));
 
 vi.mock("@/lib/concurrency", () => ({
@@ -184,5 +186,35 @@ describe("POST /api/webhooks/[slug] — token verification", () => {
       params("wf-slug"),
     );
     expect(res.status).toBe(403);
+  });
+
+  it("sanitises a runtime 500 (generic message + logId, no raw detail leaked)", async () => {
+    seedWorkflow(dbHolder.current!, { token: null, isActive: 1 });
+    vi.mocked(executeWorkflow).mockResolvedValueOnce({
+      result: null,
+      error: "Upstream provider error: {\"path\":\"/srv/app/secret\",\"token\":\"sk-leak\"}",
+      traces: [],
+    });
+    const res = await POST(makeReq("http://localhost/api/webhooks/wf-slug"), params("wf-slug"));
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(false);
+    expect(body.error).toBe("Internal error executing the workflow");
+    expect(typeof body.logId).toBe("string");
+    expect(JSON.stringify(body)).not.toContain("sk-leak");
+    expect(JSON.stringify(body)).not.toContain("/srv/app/secret");
+  });
+
+  it("keeps the safe timeout message on a 504 webhook response", async () => {
+    seedWorkflow(dbHolder.current!, { token: null, isActive: 1 });
+    vi.mocked(executeWorkflow).mockResolvedValueOnce({
+      result: null,
+      error: "Workflow execution timed out after 30000 ms",
+      traces: [],
+    });
+    const res = await POST(makeReq("http://localhost/api/webhooks/wf-slug"), params("wf-slug"));
+    expect(res.status).toBe(504);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.error).toContain("timed out");
   });
 });

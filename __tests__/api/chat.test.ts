@@ -207,15 +207,21 @@ describe("handleExecutionRequest — auth flow", () => {
     expect((body as Record<string, unknown>).error).toBe("No output node is connected");
   });
 
-  it("still returns 500 for a genuine runtime execution error", async () => {
+  it("returns a sanitized 500 (generic message + logId, no raw detail leaked)", async () => {
     seedKey(db);
     vi.mocked(executeWorkflow).mockResolvedValueOnce({
       result: null,
-      error: "Custom Code runtime error: boom",
+      error: "Upstream provider error: {\"trace\":\"/srv/app/secret\",\"token\":\"sk-leak\"}",
       traces: [],
     });
-    const { status } = await call("sk-wf-valid");
+    const { status, body } = await call("sk-wf-valid");
     expect(status).toBe(500);
+    const b = body as Record<string, unknown>;
+    // Generic message + correlation id; the raw upstream detail must NOT leak.
+    expect(b.error).toBe("Internal error executing the workflow");
+    expect(typeof b.logId).toBe("string");
+    expect(JSON.stringify(b)).not.toContain("sk-leak");
+    expect(JSON.stringify(b)).not.toContain("/srv/app/secret");
   });
 
   it("returns 504 (not 500) when the execution deadline is exceeded", async () => {
