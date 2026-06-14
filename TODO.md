@@ -257,7 +257,21 @@ OAuth2 client-credentials grant, no automatic token refresh, no request signing
 (AWS SigV4, HMAC). Every integration that needs OAuth has to be hand-rolled with
 a token-fetch sub-pipeline. That's a lot of the real work in middleware.
 
-### 2.8 Schema validation / contract enforcement on input and output
+### 2.8 Schema validation / contract enforcement on input and output — ✅ DONE (2026-06-14)
+Added a **Schema Validator** node. `lib/schema-validate.ts` is a dependency-free
+JSON Schema (draft-07 subset) validator with JSON-path error tracking (type incl.
+integer/null/unions, enum/const, required/properties/additionalProperties,
+items/min-max/unique, string length/pattern, numeric bounds/multipleOf). The node
+(`lib/nodes/schema-validator.ts` + `SchemaValidatorNode.tsx`) validates its
+connected input and routes to `valid` (input passed through) / `invalid`
+(`{ valid, errors, message }`); on failure `action` either **blocks** the valid
+output (validate-and-reject) or **passes** input through while still emitting
+errors. Wire it at the entry (validate the body) or the exit (validate the
+response). Registered in both registries; catalogue updated (Logic). Covered by
+validator + executor + canvas tests (38); QA spec NODE-LOGIC-16. No native dep
+(kept the npm package portable); `format` and `allOf`/`anyOf`/`oneOf`/`not` are
+intentionally out of the subset.
+
 No JSON-Schema/OpenAPI validation node for the incoming body or the outgoing
 response. JSON Parser/Builder exist but won't reject a malformed contract. A
 gateway usually wants to validate-and-reject at the boundary.

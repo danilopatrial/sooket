@@ -240,6 +240,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [NODE-LOGIC-13] Merge node — fan-in with First / Join / Object modes; join shows separator, object shows slot keys — [spec](specs/NODE-LOGIC-13.md)
 - [x] [NODE-LOGIC-14] Null Check node — fallback input disabled when connected — [spec](specs/NODE-LOGIC-14.md)
 - [x] [NODE-LOGIC-15] Sub-Workflow node — executes another workflow, target selected from dropdown — [spec](specs/NODE-LOGIC-15.md)
+- [x] [NODE-LOGIC-16] Schema Validator node — validates input against a JSON Schema; routes valid/invalid, block vs pass on failure — [spec](specs/NODE-LOGIC-16.md)
 
 ---
 

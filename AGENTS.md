@@ -242,9 +242,9 @@ Auth Validator
 
 **Format**: JSON Parser, JSON Builder, XML ↔ JSON, Template String
 
-**Logic**: If, Try/Catch, Retry, Content Guardrail, Rate Limiter, Cache,
-Semantic Cache, Router, A/B Split, Language Detect, Null Check, Merge, Custom
-Code
+**Logic**: If, Try/Catch, Retry, Content Guardrail, Schema Validator, Rate
+Limiter, Cache, Semantic Cache, Router, A/B Split, Language Detect, Null Check,
+Merge, Custom Code
 
 **Transform**: Type Cast, Concat, Array Length, Pick, Date/Time, String Ops,
 Regex Replace, Math, Size Of, PII Redact

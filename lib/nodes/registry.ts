@@ -42,6 +42,7 @@ import { execute as rateLimiter     } from "./rate-limiter";
 import { execute as anthropic       } from "./anthropic";
 import { execute as openai          } from "./openai";
 import { execute as contentGuardrail} from "./content-guardrail";
+import { execute as schemaValidator} from "./schema-validator";
 import { execute as promptCompression}from "./prompt-compression";
 import { execute as authValidator   } from "./auth-validator";
 import { execute as customCode      } from "./custom-code";
@@ -94,6 +95,7 @@ export const NODE_EXECUTOR_REGISTRY: NodeVersionRegistry = {
   "anthropic":      { 1: anthropic },
   "openai":         { 1: openai },
   "content-guardrail":  { 1: contentGuardrail },
+  "schema-validator":   { 1: schemaValidator },
   "prompt-compression": { 1: promptCompression },
   "auth-validator":     { 1: authValidator },
   "custom-code":        { 1: customCode },

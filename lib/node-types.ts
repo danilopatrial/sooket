@@ -155,6 +155,15 @@ export interface ContentGuardrailNodeData {
   connectedHandles?: string[];
 }
 
+export interface SchemaValidatorNodeData {
+  /** JSON Schema (draft-07 subset) text the input is validated against. */
+  schema?: string;
+  /** On a validation failure: "block" the valid output, or "pass" input through. */
+  action?: "block" | "pass";
+  onChange?: (data: Partial<SchemaValidatorNodeData>) => void;
+  connectedHandles?: string[];
+}
+
 export interface RateLimiterNodeData {
   keySource?: "workflow" | "ip" | "custom";
   windowSeconds?: number;

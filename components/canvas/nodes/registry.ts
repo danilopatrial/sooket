@@ -6,7 +6,7 @@ import {
   ShieldAlert, Link2, List, KeyRound, Clock, Type, Calculator,
   Ruler, ToggleLeft, AlignLeft, Binary, ArrowLeft, Combine,
   Regex, Shuffle, Shield, ListPlus, Merge, Bug, FileCode2, Languages, Layers, BrainCircuit,
-  Webhook, RotateCcw, Timer, ScanEye, Replace, Minimize2, Dices, Bot,
+  Webhook, RotateCcw, Timer, ScanEye, Replace, Minimize2, Dices, Bot, FileCheck2,
 } from "lucide-react";
 import type { NodeProps } from "@xyflow/react";
 import { AnthropicNode } from "./AnthropicNode";
@@ -49,6 +49,7 @@ import { WebhookNode } from "./WebhookNode";
 import { RetryNode } from "./RetryNode";
 import { RateLimiterNode } from "./RateLimiterNode";
 import { ContentGuardrailNode } from "./ContentGuardrailNode";
+import { SchemaValidatorNode } from "./SchemaValidatorNode";
 import { CustomCodeNode } from "./CustomCodeNode";
 import { RegexReplaceNode } from "./RegexReplaceNode";
 import { SentimentNode } from "./SentimentNode";
@@ -409,6 +410,18 @@ export const NODE_REGISTRY: NodeDef[] = [
     defaultData: { patterns: [], useLlm: false, llmRules: "", action: "block" },
     primaryInput: "input",
     primaryOutput: "output",
+  },
+  {
+    type: "schema-validator",
+    component: SchemaValidatorNode,
+    label: "Schema Validator",
+    sub: "Validate input against a JSON Schema",
+    color: "bg-teal-500",
+    icon: FileCheck2,
+    category: "logic",
+    defaultData: { schema: "", action: "block" },
+    primaryInput: "input",
+    primaryOutput: "valid",
   },
   {
     type: "rate-limiter",
