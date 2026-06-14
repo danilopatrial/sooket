@@ -341,23 +341,29 @@ flaw exactly — just friction I'd weigh before standardizing a team on it.
 
 ---
 
-## 6. Health endpoint: add readiness check (DB probe)
+## 6. Health endpoint: add readiness check (DB probe) — ✅ DONE (2026-06-14)
+Implemented: `GET /api/health?ready=1` opt-in readiness mode (kept on the same
+path so it stays exempt in `isPublicPath()` — a sub-path would not). The probe
+(`lib/db/health.ts` `probeDatabaseReady`) does a `SELECT 1` read **plus** a write
+check by rewriting `PRAGMA user_version` to its current value — a genuine header
+write that detects a read-only/full-volume DB without polluting data or needing a
+table (`user_version` is unused; migrations live in `schema_migrations`). Body
+gains `checks: { db: "ok" | "error" }`; any failure → HTTP 503 (orchestrators key
+off the status). Liveness (`GET /api/health`, no flag) is byte-for-byte unchanged
+and never touches the DB. Covered by unit tests (`__tests__/db/health.test.ts`:
+healthy / read-only / closed handle) + route tests (`__tests__/api/health.test.ts`:
+liveness unchanged, readiness 200/503, truthy/falsey `ready`, getDb-throws) and QA
+spec API-15; documented in `.env.example` and AGENTS.md.
 
-`/api/health` is currently a pure liveness probe — it returns `ok` without
-touching SQLite, so it can't distinguish "process up" from "up but DB
-unwritable" (full volume, bad mount, locked file). Orchestrators (Docker
-healthchecks, k8s/Fly-style probes, future hosted control plane) need that
-distinction to know when to route traffic vs. restart/alert.
-
-- [ ] Add readiness mode: `GET /api/health?ready=1` (or a separate `/api/health/ready`)
-- [ ] Probe: trivial DB round-trip — open handle + `SELECT 1`, plus a write
-      check (e.g. `PRAGMA user_version` read or insert/delete on a probe row)
-- [ ] Response: extend body with `checks: { db: "ok" | "error" }`; return
-      HTTP 503 when any check fails (orchestrators key off status code)
-- [ ] Keep the probe cheap (<5 ms) and unauthenticated — must stay in
-      `isPublicPath()`
-- [ ] Tests: healthy path, missing/readonly DB file path
-- [ ] Document in `.env.example` / docs alongside the existing health note
+- [x] Add readiness mode: `GET /api/health?ready=1` (chose the query flag over a
+      separate path so it stays in `isPublicPath()`)
+- [x] Probe: trivial DB round-trip — `SELECT 1`, plus a write check
+      (`PRAGMA user_version` rewrite — detects read-only/unwritable DB)
+- [x] Response: extend body with `checks: { db: "ok" | "error" }`; return
+      HTTP 503 when any check fails
+- [x] Keep the probe cheap and unauthenticated — stays in `isPublicPath()`
+- [x] Tests: healthy path, read-only/closed DB path, getDb-throws path
+- [x] Document in `.env.example` / docs alongside the existing health note
 
 Liveness behavior (`GET /api/health` with no flag) stays exactly as-is.
 

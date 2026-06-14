@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { DatabaseSync } from "node:sqlite";
 
 vi.mock("next/server", () => ({
   NextResponse: {
@@ -11,11 +12,23 @@ vi.mock("next/server", () => ({
   },
 }));
 
+// The route opens the DB via getDb() only in readiness mode; mock it so the
+// real probe (lib/db/health) runs against a controllable handle.
+vi.mock("@/lib/db", () => ({ getDb: vi.fn() }));
+
 import { GET } from "@/app/api/health/route";
+import { getDb } from "@/lib/db";
 import { version as pkgVersion } from "@/package.json";
+
+const getDbMock = vi.mocked(getDb);
+
+function readyReq(query = "?ready=1"): Request {
+  return new Request(`http://localhost/api/health${query}`);
+}
 
 afterEach(() => {
   vi.useRealTimers();
+  getDbMock.mockReset();
 });
 
 describe("GET /api/health", () => {
@@ -92,5 +105,86 @@ describe("GET /api/health", () => {
       const body = await res.json();
       expect(body.status).toBe("ok");
     }
+  });
+
+  it("liveness does not touch the DB (getDb never called)", async () => {
+    await GET();
+    await GET(new Request("http://localhost/api/health"));
+    expect(getDbMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/health?ready=1 (readiness)", () => {
+  it("returns 200 with checks.db = 'ok' when the DB is healthy", async () => {
+    const db = new DatabaseSync(":memory:");
+    getDbMock.mockReturnValue(db);
+
+    const res = await GET(readyReq());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.status).toBe("ok");
+    expect(body.checks).toEqual({ db: "ok" });
+    db.close();
+  });
+
+  it("includes the liveness fields alongside checks", async () => {
+    const db = new DatabaseSync(":memory:");
+    getDbMock.mockReturnValue(db);
+
+    const body = await (await GET(readyReq())).json();
+    expect(Object.keys(body).sort()).toEqual([
+      "checks",
+      "status",
+      "timestamp",
+      "uptime",
+      "version",
+    ]);
+    expect(body.version).toBe(pkgVersion);
+    db.close();
+  });
+
+  it("returns 503 with checks.db = 'error' when the DB probe fails", async () => {
+    const db = new DatabaseSync(":memory:");
+    db.close(); // closed handle → probe throws internally → "error"
+    getDbMock.mockReturnValue(db);
+
+    const res = await GET(readyReq());
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.status).toBe("error");
+    expect(body.checks).toEqual({ db: "error" });
+  });
+
+  it("returns 503 when the DB cannot even be opened (getDb throws)", async () => {
+    getDbMock.mockImplementation(() => {
+      throw new Error("cannot open database");
+    });
+
+    const res = await GET(readyReq());
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.checks).toEqual({ db: "error" });
+  });
+
+  it("accepts ready=true and a bare ?ready as readiness", async () => {
+    const db = new DatabaseSync(":memory:");
+    getDbMock.mockReturnValue(db);
+
+    for (const q of ["?ready=true", "?ready"]) {
+      const res = await GET(readyReq(q));
+      expect(res.status).toBe(200);
+      expect((await res.json()).checks).toEqual({ db: "ok" });
+    }
+    db.close();
+  });
+
+  it("treats ready=0 and ready=false as liveness (no DB probe)", async () => {
+    for (const q of ["?ready=0", "?ready=false"]) {
+      const res = await GET(readyReq(q));
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.checks).toBeUndefined();
+    }
+    expect(getDbMock).not.toHaveBeenCalled();
   });
 });

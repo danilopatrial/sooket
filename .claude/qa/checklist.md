@@ -303,6 +303,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [API-12] Binary response served via `/api/binary/[id]` with correct MIME type and Content-Length — [spec](specs/API-12.md)
 - [x] [API-13] Response Builder node result: custom status code and headers reflected in HTTP response — [spec](specs/API-13.md)
 - [x] [API-14] Idempotency-Key replays the first response on retry (409 in-progress, 422 reuse-mismatch, 5xx not cached) — [spec](specs/API-14.md)
+- [x] [API-15] `GET /api/health?ready=1` readiness probe: DB read+write round-trip, `checks.db`, HTTP 503 when the DB is unreachable/unwritable — [spec](specs/API-15.md)
 
 ---
 

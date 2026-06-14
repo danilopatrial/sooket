@@ -165,7 +165,7 @@ on the user's own machine or server.
 | `/api/account/api-key` | POST | Generate/retrieve the instance-level `sk-mw-*` management key |
 | `/api/admin/backup` | GET | Download the SQLite database file (management-key gated via `Authorization: Bearer sk-mw-*`) |
 | `/api/binary/[id]` | GET | Serve stored binary data by reference ID |
-| `/api/health` | GET | Server health/uptime check (`{ status, uptime, timestamp }`) |
+| `/api/health` | GET | Liveness probe (`{ status, version, uptime, timestamp }`); add `?ready=1` for a readiness probe that round-trips the DB (read + write) and adds `checks: { db }`, returning HTTP 503 when the DB is unreachable/unwritable. Unauthenticated (`isPublicPath`); see `lib/db/health.ts` |
 | `/api/complexity` | POST | Internal route used by the Complexity Score node canvas preview |
 
 ## Database
