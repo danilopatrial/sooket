@@ -49,9 +49,9 @@ Verifies that `POST /api/v1/chat` returns 401 for requests with a missing Author
 
 ## Steps — CORS headers on 401
 
-10. Verify CORS headers are present on the 401 response:
-    - `Access-Control-Allow-Origin: *`
+10. Verify the CORS Methods/Headers are present on the 401 response:
     - `Access-Control-Allow-Methods: POST, GET, OPTIONS`
+    - `Access-Control-Allow-Origin` only when `CORS_ORIGIN` is set (deny-by-default — see API-06)
 
 ## Expected result
 - No `Authorization` header: 401 `{ "error": "Missing Authorization header" }`

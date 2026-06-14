@@ -3,7 +3,7 @@ import { getDb } from "@/lib/db";
 import { executeWorkflow, WORKFLOW_TIMEOUT_ERROR, type Workflow } from "@/lib/workflow-engine";
 import { createSqliteAdapter } from "@/lib/db/workflow-adapter";
 import { createSqliteHooks } from "@/lib/db/workflow-hooks";
-import { CORS_HEADERS } from "@/lib/execution-handler";
+import { corsHeaders } from "@/lib/execution-handler";
 import type { EvalResult } from "@/lib/workflow-types";
 import { executionSemaphore } from "@/lib/concurrency";
 import { readLimitedText, RequestBodyTooLargeError } from "@/lib/request-limit";
@@ -33,6 +33,7 @@ function extractToken(request: Request): string | null {
 
 async function handleWebhook(request: Request, slug: string): Promise<Response> {
   const db = getDb();
+  const CORS_HEADERS = corsHeaders(request.headers.get("origin"));
 
   const workflowRow = db.prepare(
     `SELECT id, nodes, edges, is_active, error_workflow_id, pin_data, webhook_token
@@ -138,8 +139,8 @@ async function handleWebhook(request: Request, slug: string): Promise<Response> 
   return NextResponse.json({ ok: true, output }, { headers: CORS_HEADERS });
 }
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+export async function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("origin")) });
 }
 
 export async function POST(request: Request, { params }: RouteParams) {

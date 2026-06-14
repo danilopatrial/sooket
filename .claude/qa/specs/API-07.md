@@ -20,10 +20,12 @@ Verifies that `OPTIONS /api/v1/chat` returns HTTP 204 with no body and the three
    ```
 2. Verify HTTP status **204** (No Content)
 3. Verify the response body is **empty** (no JSON, no HTML)
-4. Verify all three CORS headers are present:
-   - `access-control-allow-origin: *`
+4. Verify the CORS Methods/Headers are present:
    - `access-control-allow-methods: POST, GET, OPTIONS`
    - `access-control-allow-headers: Authorization, Content-Type`
+   - `access-control-allow-origin` is present **only** when `CORS_ORIGIN` is set
+     (deny-by-default — see API-06). Run with `CORS_ORIGIN=*` to see it reflected
+     on the preflight, or an allowlist origin sending a matching `Origin`.
 5. Verify no `Content-Type` header is added (no body to type)
 
 ## Steps — preflight does not require authentication
@@ -34,20 +36,20 @@ Verifies that `OPTIONS /api/v1/chat` returns HTTP 204 with no body and the three
 ## Expected result
 - HTTP 204 No Content
 - Empty response body (`null`)
-- All three CORS headers present
+- CORS Methods/Headers present; `Access-Control-Allow-Origin` only when `CORS_ORIGIN` opts in (see API-06)
 - No Authorization required for OPTIONS
 
 ## Failure indicators
 - OPTIONS returns 200 with a body instead of 204 with no body
 - OPTIONS returns 405 Method Not Allowed
-- CORS headers absent on the OPTIONS response
+- CORS Methods/Headers absent on the OPTIONS response
 - OPTIONS requires an Authorization header
 
 ## Severity rationale
 Browsers send an OPTIONS preflight before every cross-origin POST; if the preflight fails, browsers never send the actual request and the entire API is blocked for browser clients.
 
 ## Source reference
-`app/api/v1/chat/route.ts` lines 30-32 (`export async function OPTIONS() { return new Response(null, { status: 204, headers: CORS_HEADERS }); }`).
+`app/api/v1/chat/route.ts` — `export async function OPTIONS(request) { return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("origin")) }); }` (deny-by-default; see `corsHeaders` in `lib/execution-handler.ts`).
 
 ## Notes
 The OPTIONS handler returns `null` as the body and status 204 — this is the standard CORS preflight response pattern. No authentication, no DB query, no workflow lookup is performed for OPTIONS requests.

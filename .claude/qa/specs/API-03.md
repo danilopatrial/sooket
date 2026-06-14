@@ -37,7 +37,7 @@ Verifies that `POST /api/v1/chat` returns 401 with `{ "error": "API key has expi
 
 ## Steps — CORS headers on 401
 
-9. Verify the 401 response includes CORS headers (`Access-Control-Allow-Origin: *`)
+9. Verify the 401 response includes the CORS Methods/Headers (`Access-Control-Allow-Origin` only when `CORS_ORIGIN` is set — deny-by-default, see API-06)
 
 ## Expected result
 - Key with `expires_at` in the past: 401 `{ "error": "API key has expired" }`

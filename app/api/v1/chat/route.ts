@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { handleExecutionRequest, CORS_HEADERS } from "@/lib/execution-handler";
+import { handleExecutionRequest, corsHeaders } from "@/lib/execution-handler";
 import { readLimitedText, RequestBodyTooLargeError } from "@/lib/request-limit";
 
 // ─── CORS preflight ────────────────────────────────────────────────────────
 
-export async function OPTIONS() {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
+export async function OPTIONS(request: Request) {
+  return new Response(null, { status: 204, headers: corsHeaders(request.headers.get("origin")) });
 }
 
 // ─── Health check ──────────────────────────────────────────────────────────
@@ -21,6 +21,8 @@ export async function POST(request: Request) {
   const authHeader = request.headers.get("Authorization") ?? "";
   const apiKey = authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null;
 
+  const cors = corsHeaders(request.headers.get("origin"));
+
   let rawBody: string;
   try {
     rawBody = await readLimitedText(request);
@@ -28,12 +30,12 @@ export async function POST(request: Request) {
     if (err instanceof RequestBodyTooLargeError) {
       return new Response(JSON.stringify({ error: "Request body too large" }), {
         status: 413,
-        headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+        headers: { "Content-Type": "application/json", ...cors },
       });
     }
     return new Response(JSON.stringify({ error: "Failed to read request body" }), {
       status: 400,
-      headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+      headers: { "Content-Type": "application/json", ...cors },
     });
   }
 
@@ -43,7 +45,7 @@ export async function POST(request: Request) {
     request.headers.get("x-real-ip") ??
     "";
 
-  const { status, body, corsHeaders } = await handleExecutionRequest({
+  const { status, body, corsHeaders: responseCors } = await handleExecutionRequest({
     apiKey,
     rawBody,
     headers: request.headers,
@@ -62,6 +64,6 @@ export async function POST(request: Request) {
   const responseBody = NULL_BODY_STATUSES.has(status) ? null : serialized;
   return new Response(responseBody, {
     status,
-    headers: { "Content-Type": "application/json", ...corsHeaders },
+    headers: { "Content-Type": "application/json", ...responseCors },
   });
 }

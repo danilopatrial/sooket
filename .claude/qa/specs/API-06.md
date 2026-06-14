@@ -1,75 +1,60 @@
 ---
 id: API-06
-title: CORS headers present on all responses
+title: CORS is deny-by-default; Allow-Origin only when CORS_ORIGIN opts in
 severity: high
 source_files:
+  - lib/execution-handler.ts
   - app/api/v1/chat/route.ts
+  - app/api/webhooks/[slug]/route.ts
 ---
 
 ## What this tests
-Verifies that every response from `POST /api/v1/chat` — including success, error, and ResponseBuilder responses — includes the three required CORS headers.
+Verifies the CORS policy for the execution + webhook APIs: by default (no `CORS_ORIGIN`) responses carry the `Access-Control-Allow-Methods`/`-Headers` but **no** `Access-Control-Allow-Origin` (browsers block cross-origin reads); setting `CORS_ORIGIN=*` allows any origin; setting it to one or more specific origins reflects a matching request `Origin` (with `Vary: Origin`) and denies the rest. The Methods/Headers appear on every response (200/4xx/5xx and ResponseBuilder); only `Access-Control-Allow-Origin` is gated.
 
-## Steps — CORS on success response
+## Prerequisites
+- App is running at http://localhost:3000
+- A valid `sk-wf-*` key for an active workflow
+- Ability to restart the app with different `CORS_ORIGIN` values
 
-1. Send a valid request:
+## Steps — default deny (CORS_ORIGIN unset)
+1. Start the app with `CORS_ORIGIN` unset. Send a valid request with a browser-style Origin:
    ```bash
    curl -si -X POST http://localhost:3000/api/v1/chat \
-     -H "Authorization: Bearer sk-wf-<key>" \
-     -H "Content-Type: application/json" \
-     -d '{"message":"test"}'
+     -H "Authorization: Bearer sk-wf-<key>" -H "Origin: https://myapp.com" \
+     -H "Content-Type: application/json" -d '{"message":"test"}'
    ```
-2. Inspect response headers; verify all three CORS headers are present:
-   - `access-control-allow-origin: *`
-   - `access-control-allow-methods: POST, GET, OPTIONS`
-   - `access-control-allow-headers: Authorization, Content-Type`
+2. Verify the response has **no** `access-control-allow-origin` header, but **does** have `access-control-allow-methods: POST, GET, OPTIONS` and `access-control-allow-headers: Authorization, Content-Type`.
+3. Repeat for an error response (401 with no Authorization, 403 inactive workflow, 500 throwing workflow) and confirm the same: Methods/Headers present, no ACAO.
 
-## Steps — CORS on 401 (missing/invalid key)
+## Steps — wildcard opt-in (CORS_ORIGIN=*)
+4. Restart with `CORS_ORIGIN=*`. Repeat step 1. Verify `access-control-allow-origin: *` is present on success and on error responses.
 
-3. Send with no Authorization header:
-   ```bash
-   curl -si -X POST http://localhost:3000/api/v1/chat \
-     -H "Content-Type: application/json" -d '{}'
-   ```
-4. Verify 401 response still includes all three CORS headers
+## Steps — allowlist opt-in (specific origins)
+5. Restart with `CORS_ORIGIN=https://myapp.com` (a comma-separated list is also accepted, e.g. `https://a.com,https://b.com`).
+6. Send with `-H "Origin: https://myapp.com"` → verify `access-control-allow-origin: https://myapp.com` and `vary: Origin`.
+7. Send with `-H "Origin: https://evil.com"` → verify **no** `access-control-allow-origin` (denied) but `vary: Origin` still present.
+8. Send with no `Origin` header → no ACAO.
 
-## Steps — CORS on 403 (inactive workflow)
-
-5. Send with a valid key for an inactive workflow
-6. Verify 403 response includes all three CORS headers
-
-## Steps — CORS on 503 (server busy)
-
-7. Trigger a 503 (with `EXECUTION_CONCURRENCY=1 EXECUTION_MAX_QUEUE=0` as in ENGINE-07)
-8. Verify 503 response includes CORS headers
-
-## Steps — CORS on 500 (workflow execution error)
-
-9. Configure a workflow that always throws; send a valid request
-10. Verify 500 response includes CORS headers
-
-## Steps — CORS with custom CORS_ORIGIN
-
-11. Restart the app with `CORS_ORIGIN=https://myapp.com`
-12. Send any request — verify `access-control-allow-origin: https://myapp.com` (not `*`)
+## Steps — webhook + preflight parity
+9. Confirm the webhook endpoint (`/api/webhooks/<slug>`) and the `OPTIONS` preflight (`/api/v1/chat`, `/api/webhooks/<slug>`) follow the same policy: deny by default, reflect/allow per `CORS_ORIGIN`.
 
 ## Expected result
-- All responses from `POST /api/v1/chat` include:
-  - `Access-Control-Allow-Origin: *` (or `CORS_ORIGIN` env value)
-  - `Access-Control-Allow-Methods: POST, GET, OPTIONS`
-  - `Access-Control-Allow-Headers: Authorization, Content-Type`
-- These headers are present on 200, 400, 401, 403, 500, 503 responses
-- ResponseBuilder (`__rb: true`) responses also include CORS headers (they use `{ ...CORS_HEADERS, ...userHeaders }`)
+- Default (unset): no `Access-Control-Allow-Origin` on any response; Methods/Headers always present.
+- `CORS_ORIGIN=*`: `Access-Control-Allow-Origin: *` on every response (success, 4xx, 5xx, ResponseBuilder, OPTIONS).
+- `CORS_ORIGIN` = origin(s): a matching `Origin` is reflected back with `Vary: Origin`; non-matching/absent origins get no ACAO.
+- ResponseBuilder (`__rb: true`) responses follow the same policy (they spread the resolved CORS headers before user headers).
 
 ## Failure indicators
-- Any non-OPTIONS response missing one or more CORS headers
-- `Access-Control-Allow-Origin` absent on error responses (browsers can't read error bodies without it)
-- ResponseBuilder response missing CORS headers
+- A wildcard `Access-Control-Allow-Origin: *` appears when `CORS_ORIGIN` is unset (the regression this guards against — open CORS by default).
+- An allowlist origin that does not match is still reflected/allowed.
+- Methods/Headers missing from responses, breaking preflight even when an origin is configured.
+- The webhook route or OPTIONS preflight disagrees with the execution API on the policy.
 
 ## Severity rationale
-Missing CORS headers on error responses prevent browser clients from reading error messages; missing them entirely would block all cross-origin API usage.
+A wildcard CORS default on an execution API invites browser-side use of a workflow key from any origin; defaulting to deny and requiring explicit opt-in is the safer posture. High because it is a security-relevant default on the primary live endpoint.
 
 ## Source reference
-`app/api/v1/chat/route.ts` lines 15-19 (`CORS_HEADERS` object with three headers), lines 21-26 (`corsJson` helper — always includes `CORS_HEADERS`), lines 167-174 (ResponseBuilder response: `{ ...CORS_HEADERS, ...userHeaders }`).
+`lib/execution-handler.ts` — `corsMode()` parses `CORS_ORIGIN` (unset/empty → deny, `*` → wildcard, else comma-list allowlist); `corsHeaders(requestOrigin)` adds `Access-Control-Allow-Origin` only for wildcard or a matching allowlist origin (reflected, with `Vary: Origin`); `handleExecutionRequest` resolves it once from `req.headers.get("origin")`. `app/api/v1/chat/route.ts` and `app/api/webhooks/[slug]/route.ts` call `corsHeaders(request.headers.get("origin"))` for OPTIONS and their own pre-handler/error responses.
 
 ## Notes
-`corsJson` is used for all error and success responses except the ResponseBuilder path. The `CORS_ORIGIN` env variable controls the `Access-Control-Allow-Origin` value; it defaults to `"*"` (line 13).
+CORS only governs browser cross-origin reads — non-browser callers (server-to-server with a Bearer key) are unaffected regardless of this setting. Code-level coverage: `__tests__/lib/cors.test.ts` (deny/wildcard/allowlist/reflection/Vary) and the route/handler tests in `__tests__/api/`.

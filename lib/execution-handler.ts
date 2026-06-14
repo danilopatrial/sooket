@@ -29,13 +29,54 @@ import {
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
+// Cross-origin browser access is DENY by default: no `Access-Control-Allow-Origin`
+// is emitted unless the operator opts in via `CORS_ORIGIN`. Set it to `*` to allow
+// any origin (the historical default), or to one or more specific origins
+// (comma-separated) to allow only those — the request's `Origin` is then reflected
+// back when it matches, with `Vary: Origin`. Non-browser callers (Bearer key,
+// server-to-server) are unaffected; CORS only governs browser cross-origin reads.
 
-export const CORS_HEADERS: Record<string, string> = {
-  "Access-Control-Allow-Origin": CORS_ORIGIN,
+type CorsMode =
+  | { kind: "deny" }
+  | { kind: "wildcard" }
+  | { kind: "list"; origins: Set<string> };
+
+/** Resolve the CORS policy from `CORS_ORIGIN` (read at call time so it's testable). */
+function corsMode(): CorsMode {
+  const value = process.env.CORS_ORIGIN?.trim();
+  if (!value) return { kind: "deny" };
+  if (value === "*") return { kind: "wildcard" };
+  const origins = value.split(",").map((o) => o.trim()).filter(Boolean);
+  if (origins.length === 0) return { kind: "deny" };
+  return { kind: "list", origins: new Set(origins) };
+}
+
+const CORS_BASE: Record<string, string> = {
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
 };
+
+/**
+ * Build the CORS headers for one response. `Access-Control-Allow-Origin` is
+ * added only when the policy allows it: always for `*` (wildcard), or — in
+ * allowlist mode — when `requestOrigin` is one of the configured origins (then
+ * reflected back, with `Vary: Origin`). The default (deny) and any unmatched
+ * origin get no ACAO, so the browser blocks the cross-origin read.
+ */
+export function corsHeaders(requestOrigin?: string | null): Record<string, string> {
+  const mode = corsMode();
+  if (mode.kind === "wildcard") {
+    return { ...CORS_BASE, "Access-Control-Allow-Origin": "*" };
+  }
+  if (mode.kind === "list") {
+    const headers: Record<string, string> = { ...CORS_BASE, Vary: "Origin" };
+    if (requestOrigin && mode.origins.has(requestOrigin)) {
+      headers["Access-Control-Allow-Origin"] = requestOrigin;
+    }
+    return headers;
+  }
+  return { ...CORS_BASE };
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -69,8 +110,12 @@ export async function handleExecutionRequest(
 ): Promise<ExecutionResponse> {
   const ENCRYPTION_SECRET = process.env.ENCRYPTION_SECRET ?? "";
 
+  // Resolve CORS once per request from the caller's Origin (default-deny unless
+  // CORS_ORIGIN opts in). Reused for every response below.
+  const cors = corsHeaders(req.headers.get("origin"));
+
   function fail(body: unknown, status: number): ExecutionResponse {
-    return { status, body, corsHeaders: CORS_HEADERS };
+    return { status, body, corsHeaders: cors };
   }
 
   /** Rebuild a stored response for an idempotent replay, flagged for the caller. */
@@ -313,7 +358,7 @@ export async function handleExecutionRequest(
       status: rb.status,
       body: bodyStr,
       corsHeaders: {
-        ...CORS_HEADERS,
+        ...cors,
         ...(autoContentType ? { "Content-Type": autoContentType } : {}),
         ...userHeaders,
       },
@@ -324,5 +369,5 @@ export async function handleExecutionRequest(
     rv === undefined || rv === null ? "" :
     typeof rv === "object" ? rv :
     String(rv);
-  return finalize({ status: 200, body: { reply }, corsHeaders: CORS_HEADERS });
+  return finalize({ status: 200, body: { reply }, corsHeaders: cors });
 }

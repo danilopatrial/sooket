@@ -307,7 +307,19 @@ shared password and the Custom Code node is a host-RCE primitive (1.3). The trus
 boundary between "can call a workflow" and "can edit workflows" needs to be much
 louder, or genuinely enforced.
 
-### 3.4 CORS defaults to `*`
+### 3.4 CORS defaults to `*` — ✅ DONE (2026-06-14)
+CORS is now **deny-by-default**. `lib/execution-handler.ts` exposes
+`corsHeaders(origin)` (replacing the static `CORS_HEADERS`): with `CORS_ORIGIN`
+unset, no `Access-Control-Allow-Origin` is emitted (Methods/Headers still are, so
+preflight shape is intact but browsers block cross-origin reads). The operator
+opts in via `CORS_ORIGIN=*` (wildcard, the historical default) or a
+comma-separated allowlist — a matching request `Origin` is reflected back with
+`Vary: Origin`, others denied. Resolved per request (reads the `Origin` header)
+and wired through both the execution route and the webhook route (incl. OPTIONS
+preflight). Non-browser/Bearer callers are unaffected. Covered by
+`__tests__/lib/cors.test.ts` + route/handler tests; QA spec API-06 reworked
+(+ ACAO notes in API-01/02/03/07/13); documented in `.env.example`.
+
 `lib/execution-handler.ts` sets `Access-Control-Allow-Origin: *` by default.
 Auth is via Bearer key so it's not catastrophic, but a wildcard CORS default on
 an execution API invites browser-side key usage from any origin. I'd default to

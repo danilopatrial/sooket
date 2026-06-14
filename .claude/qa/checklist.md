@@ -295,7 +295,7 @@ Findings are written to `.claude/qa/findings.md`.
 - [x] [API-03] Expired API key returns 401 — [spec](specs/API-03.md)
 - [x] [API-04] Disabled API key returns 401 — [spec](specs/API-04.md)
 - [x] [API-05] Inactive workflow returns appropriate error — [spec](specs/API-05.md)
-- [x] [API-06] CORS headers present on all responses — [spec](specs/API-06.md)
+- [x] [API-06] CORS is deny-by-default; `Access-Control-Allow-Origin` only when `CORS_ORIGIN` opts in (wildcard or reflected allowlist) — [spec](specs/API-06.md)
 - [x] [API-07] OPTIONS preflight returns 204 with correct CORS headers — [spec](specs/API-07.md)
 - [x] [API-08] Rate limit exceeded returns 429 — [spec](specs/API-08.md)
 - [x] [API-09] Concurrency limit exceeded returns 503 — [spec](specs/API-09.md)

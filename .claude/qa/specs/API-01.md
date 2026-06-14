@@ -32,10 +32,12 @@ Verifies the happy-path execution of `POST /api/v1/chat`: a valid `sk-wf-*` API 
    ```
    For a passthrough workflow (Input → Output), `reply` = `{"message": "hello"}` (the request body echoed back)
 
-4. Verify CORS headers are present on the response:
-   - `Access-Control-Allow-Origin: *` (or the configured `CORS_ORIGIN`)
+4. Verify the CORS Methods/Headers are present on the response:
    - `Access-Control-Allow-Methods: POST, GET, OPTIONS`
    - `Access-Control-Allow-Headers: Authorization, Content-Type`
+   - `Access-Control-Allow-Origin` is **only** present when `CORS_ORIGIN` is set
+     (deny-by-default — see API-06); with `CORS_ORIGIN=*` it is `*`, with an
+     allowlist it reflects a matching `Origin`.
 
 5. Verify `Content-Type: application/json` is present in the response headers
 

@@ -8,7 +8,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/execution-handler", () => ({
   handleExecutionRequest: vi.fn(),
-  CORS_HEADERS: { "Access-Control-Allow-Origin": "*" },
+  corsHeaders: () => ({ "Access-Control-Allow-Origin": "*" }),
 }));
 
 vi.mock("@/lib/request-limit", () => ({

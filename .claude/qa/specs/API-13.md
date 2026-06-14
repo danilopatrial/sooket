@@ -30,7 +30,7 @@ Verifies that when a workflow's Output node receives a Response Builder result (
 5. Verify `X-Custom-Header: my-value` is present in the response headers
 6. Verify `Content-Type: application/json` is auto-added (body is valid JSON)
 7. Verify response body is `{"created":true}` — **not** wrapped in `{ "reply": ... }`
-8. Verify CORS headers are also present (`Access-Control-Allow-Origin: *`)
+8. Verify the CORS Methods/Headers are also present (`Access-Control-Allow-Origin` only when `CORS_ORIGIN` is set — deny-by-default, see API-06)
 
 ## Steps — auto Content-Type detection
 
