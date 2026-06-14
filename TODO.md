@@ -443,7 +443,16 @@ in `handleExecutionRequest` can leak internal detail to the caller. Errors that
 cross the trust boundary should be sanitized to a generic message + an internal
 log id.
 
-### 3.6 "Not the Next.js you know" + bespoke expression language = onboarding tax
+### 3.6 "Not the Next.js you know" + bespoke expression language = onboarding tax — ✅ DONE (2026-06-14, reference doc)
+Resolved by documenting the DSL in AGENTS.md ("Expression language"): the two
+*separate* systems (`{{ $node/$json/$body }}` expressions resolved by the engine
+over `node.data` vs `$VAR` customer-variable substitution in a node's own
+fields), the available refs + dot-paths, pure-vs-mixed value semantics, and —
+crucially — the **"unknown refs fail quiet (kept verbatim)"** behaviour the item
+flags, with a debugging tip (suspect a typo'd id/path; check the Logs-tab input
+trace). The Next.js caveat is cross-referenced to the existing bundled-docs
+guidance. Documentation only — reduces the ramp-up cost the item names.
+
 The `{{ $node.X }}` / `{{ $json }}` mini-language (`lib/expr.ts`) is reasonable,
 but it's a custom DSL with its own resolution order and silent `undefined` on
 unknown refs — which means typos fail quiet, not loud. Combined with the repo's

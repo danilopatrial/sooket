@@ -314,6 +314,40 @@ with retry" delivery. Those imply a persistent worker pool and broker — a
 multi-process concern outside the single-process model (§3.1). The Webhook node
 covers fire-and-forget *outbound* calls (errors swallowed; see NODE-EXT-05).
 
+## Expression language
+
+Node fields can reference other data with two **separate** mini-languages — know
+which is which:
+
+- **`{{ … }}` expressions** (`lib/expr.ts`) — pull values from elsewhere in the
+  execution. Resolved by the engine over `node.data` *before* the node runs
+  (`resolveNodeData`; referenced upstream nodes are pre-evaluated via
+  `extractNodeRefs`). Available refs:
+  - `{{ $node.<id> }}` / `{{ $node.<id>.<path> }}` — another node's output (by
+    node id), optionally a dot-path into it.
+  - `{{ $json }}` / `{{ $json.<path> }}` — the value flowing on the active path
+    (the node's primary input).
+  - `{{ $body }}` / `{{ $body.<path> }}` — the raw request body.
+- **`$VAR` substitution** (`resolveVars` in `lib/nodes/utils.ts`) — inlines
+  **customer variables** (UPPER_SNAKE, AES-encrypted at rest) inside a node's own
+  string fields (e.g. an HTTP header `Bearer $API_TOKEN`). This is *not* the same
+  system as `{{ }}` and only matches `$NAME`.
+
+Two behaviours worth internalising (they're intentional, but they bite newcomers):
+
+- **Pure vs mixed.** If the whole field is a single `{{ expr }}`, the **raw
+  value** is returned (object/array/number preserved). In a mixed string
+  (`"x {{ expr }} y"`) each block is stringified (objects → JSON) and spliced in.
+- **Unknown refs fail quiet.** An unresolvable expression is left **verbatim** —
+  a typo'd `{{ $node.tpyo }}` stays in the output as that literal text rather than
+  becoming empty or erroring. When a field "won't interpolate," suspect a typo'd
+  node id / path first, and check the node's input trace (the Logs tab) to see the
+  actual upstream value shape.
+
+(For the broader "this is NOT the Next.js you know" caveat — read the bundled
+guides under `node_modules/next/dist/docs/` before touching framework-level code,
+per the top of this file.)
+
 ## Node Development
 
 ### Catalogue
