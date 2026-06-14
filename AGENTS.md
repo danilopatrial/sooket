@@ -241,6 +241,26 @@ by design (see §3.1 in TODO / the scaling note); there is no second process to
 share a cache with, and the node caches already persist in the shared SQLite
 file used by the optional execution server.
 
+## Versioning & canary
+
+`is_active` is an all-or-nothing flip (one workflow serves the live endpoint),
+which mirrors the single-process model. Safe rollout is expressed **inside** the
+graph rather than as a separate deploy system:
+
+- **Percentage canary** — the **A/B Split** node does weighted routing (branch
+  weights summing to 100). Point one branch at a **Sub-Workflow** running the new
+  pipeline and the other at the current one to send, e.g., 10% of traffic to the
+  canary; adjust the weights to ramp.
+- **Rollback / history** — every PATCH snapshots `workflow_versions` (capped at
+  50); `POST /api/workflows/[slug]/versions` restores a prior snapshot.
+- **Pin behaviour across breaking node changes** — node executors are versioned
+  by `typeVersion`, so saved workflows keep running their pinned version while
+  new edits adopt a newer one.
+
+**Non-goal:** deploy-level blue/green — two *separately deployed* versions live
+side by side behind a router with promotion. That belongs to a multi-process /
+orchestrated deployment, which is outside the single-process design (§3.1).
+
 ## Node Development
 
 ### Catalogue

@@ -257,7 +257,18 @@ caching with ETag / `Cache-Control` honoring, and no shared cache across
 replicas. The node caches live in SQLite which helps, but the semantics are
 per-node, not per-endpoint.
 
-### 2.6 Versioned/canary deploys of a workflow
+### 2.6 Versioned/canary deploys of a workflow — ✅ DONE (2026-06-14, documented pattern + non-goal)
+Resolved as documentation. Safe rollout is expressed inside the graph (fitting
+the single-process model), now documented in AGENTS.md ("Versioning & canary"):
+**percentage canary** via the **A/B Split** node (weighted routing) pointing
+branches at **Sub-Workflow** nodes for the new vs current pipeline (ramp by
+adjusting weights); **rollback/history** via `workflow_versions` + the
+`/versions` restore endpoint; and **breaking-change pinning** via node
+`typeVersion`. Deploy-level blue/green (two separately-deployed versions behind a
+router with promotion) is an explicit **non-goal** of the single-process design
+(§3.1). No code/test added — the building blocks (A/B Split, Sub-Workflow,
+versions) already exist and are covered by their own specs.
+
 `workflow_versions` snapshots history and you can restore, but there's no notion
 of running v(n) and v(n+1) side by side, percentage canarying a new pipeline, or
 blue/green promotion. Setting `is_active` is an all-or-nothing flip. The A/B
